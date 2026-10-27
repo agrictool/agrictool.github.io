@@ -1,0 +1,162 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      // Checks both the Firestore admins collection (Spark fallback)
+      // and the custom claim (Blaze primary approach)
+      return isSignedIn() && (
+        request.auth.token.role == 'admin' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isActive() {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountStatus == 'active';
+    }
+
+    function phaseIsOpen(phaseField) {
+      return get(/databases/$(database)/documents/programmeSettings/current).data[phaseField] == 'open';
+    }
+
+    function isParticipant() {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'participant';
+    }
+
+    // ── Public read-only settings ─────────────────────────────────────────────
+    match /programmeSettings/current {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ── User profiles ─────────────────────────────────────────────────────────
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create: if isOwner(uid) &&
+        request.resource.data.role == 'participant' &&
+        request.resource.data.accountStatus == 'active' &&
+        !('contributorApproved' in request.resource.data);
+      allow update: if (
+        // Participant can update limited fields only
+        (isOwner(uid) && isActive() &&
+          !('role' in request.resource.data.diff(resource.data).affectedKeys()) &&
+          !('participantId' in request.resource.data.diff(resource.data).affectedKeys()) &&
+          !('accountStatus' in request.resource.data.diff(resource.data).affectedKeys()) &&
+          !('uid' in request.resource.data.diff(resource.data).affectedKeys())
+        ) || isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // ── Admins collection (Spark fallback) ────────────────────────────────────
+    match /admins/{uid} {
+      allow read: if isAdmin();
+      allow write: if false; // Written only by bootstrap script via Admin SDK
+    }
+
+    // ── Participant ID reservation ────────────────────────────────────────────
+    match /participantIds/{participantId} {
+      allow create: if isSignedIn() &&
+        !exists(/databases/$(database)/documents/participantIds/$(participantId));
+      allow read, update, delete: if isAdmin();
+    }
+
+    // ── Survey responses ──────────────────────────────────────────────────────
+    match /surveyResponses/{responseId} {
+      // Participant can read their own responses only
+      allow read: if isSignedIn() &&
+        (resource.data.userId == request.auth.uid || isAdmin());
+
+      // Create: deterministic ID = uid_pre or uid_post, phase must be open, no existing response
+      allow create: if isActive() && isParticipant() &&
+        request.auth.uid == request.resource.data.userId &&
+        !exists(/databases/$(database)/documents/surveyResponses/$(responseId)) &&
+        (
+          (responseId == request.auth.uid + '_pre' && phaseIsOpen('preSurveyState')) ||
+          (responseId == request.auth.uid + '_post' && phaseIsOpen('postSurveyState'))
+        ) &&
+        request.resource.data.completionStatus == 'submitted';
+
+      // Admin can update (for reopening) and delete
+      allow update, delete: if isAdmin();
+    }
+
+    // ── Questionnaire schemas ─────────────────────────────────────────────────
+    match /questionnaires/{type}/versions/{version} {
+      allow read: if isSignedIn() || true; // Schemas are public (no personal data)
+      allow write: if isAdmin();
+    }
+
+    // Answer keys are admin-only, never participant-readable
+    match /answerKeys/{questionnaireId} {
+      allow read, write: if isAdmin();
+    }
+
+    // ── Toolkit entries (public fields) ──────────────────────────────────────
+    match /toolkitEntries/{toolId} {
+      allow read: if resource.data.status == 'approved' || isAdmin();
+      // New submissions via Function (Blaze) or contributor with approved account
+      allow create: if isSignedIn() &&
+        request.resource.data.status == 'pending' &&
+        (
+          isAdmin() ||
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.contributorApproved == true
+        );
+      allow update, delete: if isAdmin();
+    }
+
+    // Toolkit private data (contributor PII, moderation notes)
+    match /toolkitPrivate/{toolId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Toolkit categories
+    match /toolkitCategories/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ── Contributor access codes ──────────────────────────────────────────────
+    match /contributorAccess/{id} {
+      allow read, write: if isAdmin();
+      // Client never reads raw codes
+    }
+
+    // ── Certificates ─────────────────────────────────────────────────────────
+    match /certificates/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      // Create: participant must have both surveys, cert phase open, no existing cert
+      allow create: if isActive() && isOwner(uid) &&
+        phaseIsOpen('certificatePhaseState') &&
+        !exists(/databases/$(database)/documents/certificates/$(uid)) &&
+        exists(/databases/$(database)/documents/surveyResponses/$(uid + '_pre')) &&
+        exists(/databases/$(database)/documents/surveyResponses/$(uid + '_post')) &&
+        request.resource.data.status == 'issued';
+      allow update, delete: if isAdmin();
+    }
+
+    // ── Group challenge scores ────────────────────────────────────────────────
+    match /groupChallengeScores/{scoreId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // ── Admin audit logs ──────────────────────────────────────────────────────
+    match /adminAuditLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update, delete: if false; // Append-only
+    }
+  }
+}

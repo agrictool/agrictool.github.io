@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
 import { collection, doc, setDoc } from 'firebase/firestore'
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { db, storage } from '../../lib/firebase'
+import { db } from '../../lib/firebase'
+import { uploadToCloudinary, validateImage } from '../../lib/cloudinary'
 import { useAuth } from '../../contexts/AuthContext'
 import { Input, Select, Textarea, Button, Alert, Card } from '../../components/ui'
 import { Upload, X, CheckCircle2, PlusCircle } from 'lucide-react'
@@ -24,57 +24,24 @@ const USER_TYPES = [
   'Laboratory Technicians','Agribusiness Managers','Policymakers','Other',
 ]
 const COST_OPTIONS = [
-  { value: 'Free', label: 'Free — core functionality available without payment' },
+  { value: 'Free',     label: 'Free — core functionality available without payment' },
   { value: 'Freemium', label: 'Freemium — basic free, advanced features paid' },
-  { value: 'Premium', label: 'Premium — subscription, licence or purchase required' },
+  { value: 'Premium',  label: 'Premium — subscription, licence or purchase required' },
 ]
-const MAX_FILE_SIZE = 2 * 1024 * 1024 // 2 MB
-
-function compressImage(file: File, maxKB = 150): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    const img = new Image()
-    img.onload = () => {
-      const canvas = document.createElement('canvas')
-      const maxDim = 800
-      let { width, height } = img
-      if (width > maxDim || height > maxDim) {
-        const scale = Math.min(maxDim / width, maxDim / height)
-        width = Math.round(width * scale)
-        height = Math.round(height * scale)
-      }
-      canvas.width = width
-      canvas.height = height
-      const ctx = canvas.getContext('2d')!
-      ctx.drawImage(img, 0, 0, width, height)
-      let quality = 0.85
-      const tryCompress = () => {
-        canvas.toBlob(blob => {
-          if (!blob) return reject(new Error('Canvas failed'))
-          if (blob.size <= maxKB * 1024 || quality <= 0.3) return resolve(blob)
-          quality -= 0.1
-          tryCompress()
-        }, 'image/jpeg', quality)
-      }
-      tryCompress()
-    }
-    img.onerror = reject
-    img.src = URL.createObjectURL(file)
-  })
-}
 
 interface FormData {
   toolName: string; category: string; costType: string; costDetails: string
   functionDesc: string; selectedUsers: string[]; toolType: string
   officialUrl: string; useCase: string; keywords: string
-  imageType: 'logo' | 'screenshot' | ''; contributorName: string
-  contributorOrg: string; contactEmail: string
+  imageType: 'logo' | 'screenshot' | ''
+  contributorName: string; contributorOrg: string; contactEmail: string
 }
 
 const EMPTY: FormData = {
-  toolName: '', category: '', costType: '', costDetails: '',
-  functionDesc: '', selectedUsers: [], toolType: '',
-  officialUrl: '', useCase: '', keywords: '',
-  imageType: '', contributorName: '', contributorOrg: '', contactEmail: '',
+  toolName:'', category:'', costType:'', costDetails:'',
+  functionDesc:'', selectedUsers:[], toolType:'',
+  officialUrl:'', useCase:'', keywords:'',
+  imageType:'', contributorName:'', contributorOrg:'', contactEmail:'',
 }
 
 export default function ContributePage() {
@@ -90,10 +57,8 @@ export default function ContributePage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const set = (field: keyof FormData) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
       setForm(f => ({ ...f, [field]: e.target.value }))
-      setErrors(er => ({ ...er, [field]: undefined }))
-    }
 
   const toggleUser = (u: string) => {
     setForm(f => ({
@@ -107,15 +72,8 @@ export default function ContributePage() {
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    const allowed = ['image/jpeg', 'image/png', 'image/webp']
-    if (!allowed.includes(file.type)) {
-      setErrors(er => ({ ...er, image: 'Only JPG, PNG or WebP images are allowed.' }))
-      return
-    }
-    if (file.size > MAX_FILE_SIZE) {
-      setErrors(er => ({ ...er, image: 'Image must be under 2 MB.' }))
-      return
-    }
+    const err = validateImage(file, 2)
+    if (err) { setErrors(er => ({ ...er, image: err })); return }
     setImageFile(file)
     setImagePreview(URL.createObjectURL(file))
     setErrors(er => ({ ...er, image: undefined }))
@@ -123,12 +81,12 @@ export default function ContributePage() {
 
   const validate = (): boolean => {
     const e: typeof errors = {}
-    if (!form.toolName.trim()) e.toolName = 'Tool name is required.'
-    if (!form.category) e.category = 'Category is required.'
-    if (!form.costType) e.costType = 'Cost type is required.'
-    if (!form.functionDesc.trim()) e.functionDesc = 'Please describe what the tool does.'
+    if (!form.toolName.trim())      e.toolName     = 'Tool name is required.'
+    if (!form.category)             e.category     = 'Category is required.'
+    if (!form.costType)             e.costType     = 'Cost type is required.'
+    if (!form.functionDesc.trim())  e.functionDesc = 'Please describe what the tool does.'
     if (form.functionDesc.length > 500) e.functionDesc = 'Keep this under 500 characters.'
-    if (!form.toolType) e.toolType = 'Tool type is required.'
+    if (!form.toolType)             e.toolType     = 'Tool type is required.'
     if (form.officialUrl && !/^https?:\/\/.+/.test(form.officialUrl))
       e.officialUrl = 'Please enter a valid URL starting with http:// or https://'
     if (form.contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contactEmail))
@@ -148,45 +106,46 @@ export default function ContributePage() {
     try {
       const toolId = doc(collection(db, 'toolkitEntries')).id
       let imageUrl = ''
+      let imagePublicId = ''
 
       if (imageFile) {
-        const compressed = await compressImage(imageFile)
-        const ext = imageFile.type === 'image/png' ? 'png' : imageFile.type === 'image/webp' ? 'webp' : 'jpg'
-        const storageRef = ref(storage, `toolkit-images/${toolId}/${form.imageType || 'image'}.${ext}`)
-        await uploadBytes(storageRef, compressed, { contentType: `image/${ext}` })
-        imageUrl = await getDownloadURL(storageRef)
+        const result = await uploadToCloudinary(
+          imageFile,
+          'toolkit-images',
+          `${toolId}_${form.imageType || 'image'}`,
+        )
+        imageUrl      = result.url
+        imagePublicId = result.publicId
       }
 
-      const now = new Date().toISOString()
+      const now      = new Date().toISOString()
       const keywords = form.keywords.split(',').map(k => k.trim().toLowerCase()).filter(Boolean)
 
       await setDoc(doc(db, 'toolkitEntries', toolId), {
-        toolName: form.toolName.trim(),
-        category: form.category,
-        costType: form.costType,
+        toolName:    form.toolName.trim(),
+        category:    form.category,
+        costType:    form.costType,
         costDetails: form.costDetails.trim(),
-        function: form.functionDesc.trim(),
-        users: form.selectedUsers,
-        toolType: form.toolType,
+        function:    form.functionDesc.trim(),
+        users:       form.selectedUsers,
+        toolType:    form.toolType,
         imageUrl,
-        imageType: form.imageType || null,
+        imagePublicId: imagePublicId || null,
+        imageType:   form.imageType || null,
         officialUrl: form.officialUrl.trim() || null,
-        useCase: form.useCase.trim() || null,
+        useCase:     form.useCase.trim() || null,
         keywords,
-        status: 'pending',
+        status:      'pending',
         submittedAt: now,
-        updatedAt: now,
+        updatedAt:   now,
       })
 
-      // Private data (contributor info)
       if (form.contributorName || form.contributorOrg || form.contactEmail) {
         await setDoc(doc(db, 'toolkitPrivate', toolId), {
           contributorName: form.contributorName.trim() || null,
-          contributorOrg: form.contributorOrg.trim() || null,
-          contactEmail: form.contactEmail.trim() || null,
-          moderationNote: null,
-          reviewedBy: null,
-          reviewedAt: null,
+          contributorOrg:  form.contributorOrg.trim()  || null,
+          contactEmail:    form.contactEmail.trim()     || null,
+          moderationNote: null, reviewedBy: null, reviewedAt: null,
         })
       }
 
@@ -194,7 +153,10 @@ export default function ContributePage() {
       setStep('done')
     } catch (e) {
       console.error(e)
-      setServerError('Submission failed. Please check your connection and try again.')
+      const msg = e instanceof Error ? e.message : 'Submission failed.'
+      setServerError(msg.includes('Cloudinary')
+        ? 'Image upload failed — please check your connection and try again.'
+        : 'Submission failed. Please check your connection and try again.')
     } finally {
       setSubmitting(false)
     }
@@ -206,14 +168,14 @@ export default function ContributePage() {
         <div className="bg-white border border-[#DDE3E7] rounded-xl p-8 shadow-sm">
           <CheckCircle2 className="w-14 h-14 text-[#2E7D32] mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-[#12304A] mb-2">Tool Submitted!</h1>
-          <p className="text-[#5A6472] mb-1">
-            Your submission is under review. Once approved it will appear in the public directory.
-          </p>
+          <p className="text-[#5A6472] mb-1">Your submission is under review.</p>
           <p className="text-sm text-[#5A6472] mb-6">
-            Submission reference: <strong className="font-mono text-[#12304A]">{submissionRef}</strong>
+            Reference: <strong className="font-mono text-[#12304A]">{submissionRef}</strong>
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Button variant="primary" onClick={() => { setForm(EMPTY); setImageFile(null); setImagePreview(null); setStep('form') }}>
+            <Button variant="primary" onClick={() => {
+              setForm(EMPTY); setImageFile(null); setImagePreview(null); setStep('form')
+            }}>
               <PlusCircle className="w-4 h-4" /> Submit Another Tool
             </Button>
             <Button variant="outline" onClick={() => window.location.href = '/toolkit'}>
@@ -232,78 +194,45 @@ export default function ContributePage() {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-[#12304A]">Contribute a Digital Tool</h1>
         <p className="text-sm text-[#5A6472] mt-1">
-          Help build the Digital Food Systems Toolkit by submitting a tool from your field of expertise.
-          All submissions are reviewed before appearing in the public directory.
+          Help build the Digital Food Systems Toolkit. All submissions are reviewed before appearing publicly.
         </p>
       </div>
 
       {!firebaseUser && (
         <div className="mb-6">
           <Alert variant="info">
-            You do not need an account to submit a tool. An account is only required for participant activities.
+            You do not need an account to submit a tool.
           </Alert>
         </div>
       )}
-
-      {serverError && (
-        <div className="mb-5"><Alert variant="error">{serverError}</Alert></div>
-      )}
-
+      {serverError && <div className="mb-5"><Alert variant="error">{serverError}</Alert></div>}
       {isPreview && (
         <div className="mb-5">
           <Alert variant="info" title="Review your submission">
-            Please check all fields below before confirming. Your submission will be saved as pending for moderator review.
+            Check all fields before confirming. Your tool will be saved as pending for moderator review.
           </Alert>
         </div>
       )}
 
       <div className="space-y-6">
-        {/* Tool Name */}
+        {/* Tool Information */}
         <Card className="p-5">
           <h2 className="text-sm font-bold text-[#12304A] mb-4 border-b border-[#DDE3E7] pb-2">Tool Information</h2>
           <div className="space-y-4">
             {isPreview ? (
-              <div>
-                <p className="text-xs text-[#5A6472] mb-0.5">Tool Name</p>
-                <p className="text-sm font-medium">{form.toolName}</p>
-              </div>
-            ) : (
-              <Input label="Tool Name" required value={form.toolName} onChange={set('toolName')} error={errors.toolName} placeholder="Official name of the platform or app" />
-            )}
-
-            {isPreview ? (
-              <div>
-                <p className="text-xs text-[#5A6472] mb-0.5">Category</p>
-                <p className="text-sm font-medium">{form.category}</p>
-              </div>
-            ) : (
-              <Select label="Category" required value={form.category} onChange={set('category')} error={errors.category}
-                placeholder="Select a category"
-                options={CATEGORIES.map(c => ({ value: c, label: c }))} />
-            )}
-
-            {isPreview ? (
-              <div>
-                <p className="text-xs text-[#5A6472] mb-0.5">Tool Type</p>
-                <p className="text-sm font-medium">{form.toolType}</p>
-              </div>
-            ) : (
-              <Select label="Tool Type" required value={form.toolType} onChange={set('toolType')} error={errors.toolType}
-                placeholder="Select tool type"
-                options={TOOL_TYPES.map(t => ({ value: t, label: t }))} />
-            )}
-
-            {isPreview ? (
-              <div>
-                <p className="text-xs text-[#5A6472] mb-0.5">Cost</p>
-                <p className="text-sm font-medium">{form.costType}{form.costDetails && ` — ${form.costDetails}`}</p>
-              </div>
+              <>
+                <Preview label="Tool Name"  value={form.toolName} />
+                <Preview label="Category"   value={form.category} />
+                <Preview label="Tool Type"  value={form.toolType} />
+                <Preview label="Cost"       value={`${form.costType}${form.costDetails ? ` — ${form.costDetails}` : ''}`} />
+              </>
             ) : (
               <>
-                <Select label="Cost Type" required value={form.costType} onChange={set('costType')} error={errors.costType}
-                  placeholder="Select cost type" options={COST_OPTIONS} />
-                <Input label="Pricing Details (optional)" value={form.costDetails} onChange={set('costDetails')}
-                  placeholder="e.g. Free for basic, $49/month for premium tier" />
+                <Input label="Tool Name" required value={form.toolName} onChange={set('toolName')} error={errors.toolName} placeholder="Official name of the platform or app" />
+                <Select label="Category" required value={form.category} onChange={set('category')} error={errors.category} placeholder="Select a category" options={CATEGORIES.map(c => ({ value: c, label: c }))} />
+                <Select label="Tool Type" required value={form.toolType} onChange={set('toolType')} error={errors.toolType} placeholder="Select tool type" options={TOOL_TYPES.map(t => ({ value: t, label: t }))} />
+                <Select label="Cost Type" required value={form.costType} onChange={set('costType')} error={errors.costType} placeholder="Select cost type" options={COST_OPTIONS} />
+                <Input label="Pricing Details (optional)" value={form.costDetails} onChange={set('costDetails')} placeholder="e.g. Free for basic access, $49/month for premium tier" />
               </>
             )}
           </div>
@@ -314,98 +243,85 @@ export default function ContributePage() {
           <h2 className="text-sm font-bold text-[#12304A] mb-4 border-b border-[#DDE3E7] pb-2">Description</h2>
           <div className="space-y-4">
             {isPreview ? (
-              <div>
-                <p className="text-xs text-[#5A6472] mb-0.5">What It Does</p>
-                <p className="text-sm">{form.functionDesc}</p>
-              </div>
+              <>
+                <Preview label="What It Does" value={form.functionDesc} />
+                <Preview label="Who Uses It"  value={form.selectedUsers.join(', ') || 'Not specified'} />
+                {form.useCase && <Preview label="Use Case" value={form.useCase} />}
+              </>
             ) : (
-              <Textarea label="What It Does" required value={form.functionDesc} onChange={set('functionDesc')}
-                error={errors.functionDesc}
-                hint="1–2 student-friendly sentences. Maximum 500 characters."
-                placeholder="Describe the tool's main function in plain language…" />
-            )}
-
-            {isPreview ? (
-              <div>
-                <p className="text-xs text-[#5A6472] mb-0.5">Who Uses It</p>
-                <p className="text-sm">{form.selectedUsers.join(', ') || 'Not specified'}</p>
-              </div>
-            ) : (
-              <div>
-                <p className="text-sm font-medium text-[#12304A] mb-2">Who Uses It</p>
-                <div className="flex flex-wrap gap-2">
-                  {USER_TYPES.map(u => (
-                    <button
-                      key={u} type="button"
-                      onClick={() => toggleUser(u)}
-                      className={`px-3 py-1 text-xs rounded-full border transition-colors
-                        ${form.selectedUsers.includes(u)
-                          ? 'bg-[#2E7D32] text-white border-[#2E7D32]'
-                          : 'bg-white text-[#374151] border-[#DDE3E7] hover:border-[#2E7D32]'}`}
-                    >
-                      {u}
-                    </button>
-                  ))}
+              <>
+                <Textarea label="What It Does" required value={form.functionDesc} onChange={set('functionDesc')} error={errors.functionDesc} hint="1–2 student-friendly sentences. Maximum 500 characters." placeholder="Describe the tool's main function in plain language…" />
+                <div>
+                  <p className="text-sm font-medium text-[#12304A] mb-2">Who Uses It</p>
+                  <div className="flex flex-wrap gap-2">
+                    {USER_TYPES.map(u => (
+                      <button key={u} type="button" onClick={() => toggleUser(u)}
+                        className={`px-3 py-1 text-xs rounded-full border transition-colors
+                          ${form.selectedUsers.includes(u)
+                            ? 'bg-[#2E7D32] text-white border-[#2E7D32]'
+                            : 'bg-white text-[#374151] border-[#DDE3E7] hover:border-[#2E7D32]'}`}>
+                        {u}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
-
-            {isPreview ? (
-              form.useCase && <div><p className="text-xs text-[#5A6472] mb-0.5">Use Case</p><p className="text-sm">{form.useCase}</p></div>
-            ) : (
-              <Textarea label="Use Case (optional)" value={form.useCase} onChange={set('useCase')}
-                placeholder="Describe a specific agricultural or food systems use case for this tool…" />
+                <Textarea label="Use Case (optional)" value={form.useCase} onChange={set('useCase')} placeholder="Describe a specific use case…" />
+              </>
             )}
           </div>
         </Card>
 
-        {/* URL & Keywords */}
+        {/* Links & Keywords */}
         <Card className="p-5">
           <h2 className="text-sm font-bold text-[#12304A] mb-4 border-b border-[#DDE3E7] pb-2">Links & Discovery</h2>
           <div className="space-y-4">
             {isPreview ? (
-              form.officialUrl && <div><p className="text-xs text-[#5A6472] mb-0.5">Official URL</p>
-                <a href={form.officialUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-[#2E7D32] underline">{form.officialUrl}</a></div>
+              <>
+                {form.officialUrl && (
+                  <div>
+                    <p className="text-xs text-[#5A6472] mb-0.5">Official URL</p>
+                    <a href={form.officialUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-[#2E7D32] underline">{form.officialUrl}</a>
+                  </div>
+                )}
+                {form.keywords && <Preview label="Keywords" value={form.keywords} />}
+              </>
             ) : (
-              <Input label="Official URL (optional)" type="url" value={form.officialUrl} onChange={set('officialUrl')}
-                error={errors.officialUrl} placeholder="https://" />
-            )}
-            {isPreview ? (
-              form.keywords && <div><p className="text-xs text-[#5A6472] mb-0.5">Keywords</p><p className="text-sm">{form.keywords}</p></div>
-            ) : (
-              <Input label="Keywords (optional)" value={form.keywords} onChange={set('keywords')}
-                hint="Comma-separated. Helps with search." placeholder="e.g. soil moisture, crop monitoring, satellite" />
+              <>
+                <Input label="Official URL (optional)" type="url" value={form.officialUrl} onChange={set('officialUrl')} error={errors.officialUrl} placeholder="https://" />
+                <Input label="Keywords (optional)" value={form.keywords} onChange={set('keywords')} hint="Comma-separated. Helps with search." placeholder="e.g. soil moisture, crop monitoring, satellite" />
+              </>
             )}
           </div>
         </Card>
 
         {/* Image */}
         <Card className="p-5">
-          <h2 className="text-sm font-bold text-[#12304A] mb-4 border-b border-[#DDE3E7] pb-2">Image</h2>
+          <h2 className="text-sm font-bold text-[#12304A] mb-1 border-b border-[#DDE3E7] pb-2">Image</h2>
+          <p className="text-xs text-[#5A6472] mb-4">
+            JPG, PNG or WebP · max 2 MB · uploaded to Cloudinary (free image hosting)
+          </p>
           {isPreview ? (
-            imagePreview ? (
-              <div>
-                <p className="text-xs text-[#5A6472] mb-2">Image Preview ({form.imageType})</p>
-                <img src={imagePreview} alt="Tool preview" className="max-h-32 rounded border border-[#DDE3E7] object-contain" />
-              </div>
-            ) : <p className="text-sm text-[#5A6472]">No image submitted.</p>
+            imagePreview
+              ? <div>
+                  <p className="text-xs text-[#5A6472] mb-2">Preview ({form.imageType || 'image'})</p>
+                  <img src={imagePreview} alt="Tool preview" className="max-h-32 rounded border border-[#DDE3E7] object-contain" />
+                </div>
+              : <p className="text-sm text-[#5A6472]">No image submitted.</p>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-3">
               <Select label="Image Type" value={form.imageType} onChange={set('imageType')}
-                options={[{ value: 'logo', label: 'Logo' }, { value: 'screenshot', label: 'UI Screenshot' }]}
+                options={[{ value: 'logo', label: 'Logo (square, transparent background preferred)' }, { value: 'screenshot', label: 'UI Screenshot (16:9 preferred)' }]}
                 placeholder="Select image type (optional)" />
               <div>
                 <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp"
                   onChange={handleImageSelect} className="sr-only" id="image-upload" />
                 <label htmlFor="image-upload"
                   className="flex flex-col items-center gap-2 border-2 border-dashed border-[#DDE3E7] rounded-lg p-6 cursor-pointer hover:border-[#2E7D32] transition-colors">
-                  {imagePreview ? (
-                    <img src={imagePreview} alt="Preview" className="max-h-24 object-contain rounded" />
-                  ) : (
-                    <Upload className="w-8 h-8 text-[#5A6472]" />
-                  )}
+                  {imagePreview
+                    ? <img src={imagePreview} alt="Preview" className="max-h-24 object-contain rounded" />
+                    : <Upload className="w-8 h-8 text-[#5A6472]" />}
                   <span className="text-sm text-[#5A6472]">
-                    {imageFile ? imageFile.name : 'Click to upload (JPG, PNG, WebP — max 2 MB)'}
+                    {imageFile ? imageFile.name : 'Click to upload'}
                   </span>
                 </label>
                 {imagePreview && (
@@ -423,31 +339,46 @@ export default function ContributePage() {
         {/* Contributor Info */}
         <Card className="p-5">
           <h2 className="text-sm font-bold text-[#12304A] mb-1 border-b border-[#DDE3E7] pb-2">Contributor Details (Optional & Private)</h2>
-          <p className="text-xs text-[#5A6472] mb-4">This information is used for moderation only and is never shown publicly.</p>
-          <div className="space-y-4">
-            <Input label="Your Name (optional)" value={form.contributorName} onChange={set('contributorName')} />
-            <Input label="Organisation (optional)" value={form.contributorOrg} onChange={set('contributorOrg')} />
-            <Input label="Contact Email (optional, private)" type="email" value={form.contactEmail}
-              onChange={set('contactEmail')} error={errors.contactEmail} />
-          </div>
+          <p className="text-xs text-[#5A6472] mb-4">Used for moderation only — never shown publicly.</p>
+          {isPreview ? (
+            <div className="space-y-2">
+              {form.contributorName && <Preview label="Name" value={form.contributorName} />}
+              {form.contributorOrg  && <Preview label="Organisation" value={form.contributorOrg} />}
+              {form.contactEmail    && <Preview label="Email (private)" value={form.contactEmail} />}
+              {!form.contributorName && !form.contributorOrg && !form.contactEmail &&
+                <p className="text-sm text-[#5A6472]">No contributor details provided.</p>}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <Input label="Your Name (optional)" value={form.contributorName} onChange={set('contributorName')} />
+              <Input label="Organisation (optional)" value={form.contributorOrg} onChange={set('contributorOrg')} />
+              <Input label="Contact Email (optional, private)" type="email" value={form.contactEmail} onChange={set('contactEmail')} error={errors.contactEmail} />
+            </div>
+          )}
         </Card>
 
         {/* Actions */}
         <div className="flex flex-col sm:flex-row gap-3 justify-end pt-2">
-          {!isPreview ? (
-            <Button variant="primary" size="lg" onClick={handlePreview}>
-              Preview Before Submitting
-            </Button>
-          ) : (
-            <>
-              <Button variant="outline" size="lg" onClick={() => setStep('form')}>Edit</Button>
-              <Button variant="primary" size="lg" loading={submitting} onClick={handleSubmit}>
-                {submitting ? 'Submitting…' : 'Confirm & Submit Tool'}
-              </Button>
-            </>
-          )}
+          {!isPreview
+            ? <Button variant="primary" size="lg" onClick={handlePreview}>Preview Before Submitting</Button>
+            : <>
+                <Button variant="outline" size="lg" onClick={() => setStep('form')}>Edit</Button>
+                <Button variant="primary" size="lg" loading={submitting} onClick={handleSubmit}>
+                  {submitting ? 'Uploading & Submitting…' : 'Confirm & Submit Tool'}
+                </Button>
+              </>
+          }
         </div>
       </div>
     </main>
+  )
+}
+
+function Preview({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs text-[#5A6472] mb-0.5">{label}</p>
+      <p className="text-sm font-medium text-[#12304A]">{value || '—'}</p>
+    </div>
   )
 }

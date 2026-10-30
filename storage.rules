@@ -1,44 +1,9 @@
+// Firebase Storage is not used in this deployment.
+// Images are hosted on Cloudinary (free tier).
+// This file is kept as a placeholder. No Storage bucket is needed on the Spark plan.
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-
-    function isAdmin() {
-      return request.auth != null && (
-        request.auth.token.role == 'admin' ||
-        firestore.exists(/databases/(default)/documents/admins/$(request.auth.uid))
-      );
-    }
-
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function isValidImageType() {
-      return request.resource.contentType.matches('image/(jpeg|jpg|png|webp)');
-    }
-
-    function isUnderSizeLimit() {
-      // 2 MB limit; client compresses to ~150 KB but rule enforces hard cap
-      return request.resource.size < 2 * 1024 * 1024;
-    }
-
-    // Toolkit tool images
-    match /toolkit-images/{toolId}/{filename} {
-      // Public read for approved tools (image URL stored in Firestore entry)
-      allow read: if true;
-      // Write: signed-in contributor or admin; type and size enforced
-      allow create: if isSignedIn() && isValidImageType() && isUnderSizeLimit();
-      allow update: if isAdmin() && isValidImageType() && isUnderSizeLimit();
-      allow delete: if isAdmin();
-    }
-
-    // Certificate logos and signature images (admin only)
-    match /settings/{filename} {
-      allow read: if true; // Logos shown on public certificate
-      allow write: if isAdmin() && isUnderSizeLimit();
-    }
-
-    // Deny all other paths
     match /{allPaths=**} {
       allow read, write: if false;
     }

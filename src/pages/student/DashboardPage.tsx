@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useSettings } from '../../contexts/SettingsContext'
-import { Card, Badge, Alert, Spinner, PhaseStatusBadge, Button } from '../../components/ui'
+import { Card, Badge, Alert, Spinner, PhaseStatusBadge, ButtonLink } from '../../components/ui'
 import { ClipboardList, CheckCircle2, Award, Lock, ChevronRight, Info } from 'lucide-react'
 
 interface CompletionStatus {
@@ -74,22 +74,18 @@ function PhaseCard({
         )}
         {!completed && !locked && state === 'open' && actionPath && (
           <div className="mt-4">
-            <Link to={actionPath}>
-              <Button variant="primary" size="sm" className="w-full sm:w-auto">
+            <ButtonLink to={actionPath} variant="primary" size="sm" className="w-full sm:w-auto">
                 {actionLabel}
                 <ChevronRight className="w-4 h-4" />
-              </Button>
-            </Link>
+              </ButtonLink>
           </div>
         )}
         {completed && actionPath && (
           <div className="mt-4">
-            <Link to={actionPath}>
-              <Button variant="outline" size="sm">
+            <ButtonLink to={actionPath} variant="outline" size="sm">
                 View Submission
                 <ChevronRight className="w-4 h-4" />
-              </Button>
-            </Link>
+              </ButtonLink>
           </div>
         )}
       </div>

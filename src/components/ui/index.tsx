@@ -1,5 +1,6 @@
 import React from 'react'
 import { Loader2 } from 'lucide-react'
+import { Link } from 'react-router-dom'
 
 // ── Button ────────────────────────────────────────────────────────────────────
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -37,6 +38,36 @@ export function Button({
       {loading && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
       {children}
     </button>
+  )
+}
+
+// ── ButtonLink (a real <a> styled as a button — never nest <button> inside <Link>) ──
+export function ButtonLink({
+  to, variant = 'primary', size = 'md', className = '', children,
+}: {
+  to: string
+  variant?: 'primary' | 'secondary' | 'outline'
+  size?: 'sm' | 'md' | 'lg'
+  className?: string
+  children: React.ReactNode
+}) {
+  const variants = {
+    primary: 'bg-[#2E7D32] text-white hover:bg-[#1B5E20] focus-visible:outline-[#2E7D32]',
+    secondary: 'bg-[#12304A] text-white hover:bg-[#0d2237] focus-visible:outline-[#12304A]',
+    outline: 'border border-[#2E7D32] text-[#2E7D32] hover:bg-[#E8F5E9] focus-visible:outline-[#2E7D32]',
+  }
+  const sizes = {
+    sm: 'px-3 py-1.5 text-sm',
+    md: 'px-4 py-2 text-sm',
+    lg: 'px-6 py-3 text-base',
+  }
+  return (
+    <Link
+      to={to}
+      className={`inline-flex items-center justify-center gap-2 font-medium rounded transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${variants[variant]} ${sizes[size]} ${className}`}
+    >
+      {children}
+    </Link>
   )
 }
 

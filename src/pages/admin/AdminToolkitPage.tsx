@@ -22,15 +22,21 @@ export default function AdminToolkitPage() {
   const [selected, setSelected] = useState<EntryWithPrivate | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [success, setSuccess] = useState('')
+  const [error, setError] = useState('')
   const [moderationNote, setModerationNote] = useState('')
   const [editMode, setEditMode] = useState(false)
   const [editData, setEditData] = useState<Partial<ToolkitEntry>>({})
 
   useEffect(() => {
-    getDocs(collection(db, 'toolkitEntries')).then(snap => {
-      setEntries(snap.docs.map(d => ({ id: d.id, ...d.data() } as ToolkitEntry)))
-      setLoading(false)
-    })
+    getDocs(collection(db, 'toolkitEntries'))
+      .then(snap => {
+        setEntries(snap.docs.map(d => ({ id: d.id, ...d.data() } as ToolkitEntry)))
+      })
+      .catch(e => {
+        console.error(e)
+        setError('Could not load tool submissions. Check that your account is listed in the admins collection.')
+      })
+      .finally(() => setLoading(false))
   }, [])
 
   const filtered = entries.filter(e =>
@@ -78,7 +84,7 @@ export default function AdminToolkitPage() {
       setSelected(null)
       setSuccess(`Tool ${newStatus} successfully.`)
       setTimeout(() => setSuccess(''), 3000)
-    } catch (e) { console.error(e) } finally { setActionLoading(null) }
+    } catch (e) { console.error(e); setError(`Action failed (${(e as { code?: string }).code ?? 'unknown error'}).`) } finally { setActionLoading(null) }
   }
 
   const handleEdit = async (toolId: string) => {
@@ -91,7 +97,7 @@ export default function AdminToolkitPage() {
       setEditMode(false)
       setSuccess('Tool updated. Returning to review status.')
       setTimeout(() => setSuccess(''), 3000)
-    } catch (e) { console.error(e) } finally { setActionLoading(null) }
+    } catch (e) { console.error(e); setError(`Action failed (${(e as { code?: string }).code ?? 'unknown error'}).`) } finally { setActionLoading(null) }
   }
 
   const handleDelete = async (toolId: string) => {
@@ -106,7 +112,7 @@ export default function AdminToolkitPage() {
       })
       setEntries(prev => prev.filter(e => e.id !== toolId))
       setSelected(null)
-    } catch (e) { console.error(e) } finally { setActionLoading(null) }
+    } catch (e) { console.error(e); setError(`Action failed (${(e as { code?: string }).code ?? 'unknown error'}).`) } finally { setActionLoading(null) }
   }
 
   const tabs: { key: Tab; label: string }[] = [
@@ -122,6 +128,7 @@ export default function AdminToolkitPage() {
       <p className="text-sm text-[#5A6472] mb-5">Review, approve, edit and manage submitted digital tools.</p>
 
       {success && <div className="mb-4"><Alert variant="success">{success}</Alert></div>}
+      {error && <div className="mb-4"><Alert variant="error">{error}</Alert></div>}
 
       {/* Tabs */}
       <div className="flex border-b border-[#DDE3E7] mb-5 gap-0">

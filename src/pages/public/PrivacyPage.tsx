@@ -1,12 +1,6 @@
 export default function PrivacyPage() {
   return (
     <main className="max-w-3xl mx-auto px-4 sm:px-6 py-12">
-      <div className="mb-8 p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-900">
-        <strong>Draft Notice.</strong> This privacy notice is a working draft provided for the project owner's
-        review. It must be reviewed with FUTA's legal team or a qualified legal adviser before it is
-        presented to participants. It does not constitute legal advice.
-      </div>
-
       <h1 className="text-2xl font-bold text-[#12304A] mb-2">Privacy Notice</h1>
       <p className="text-sm text-[#5A6472] mb-8">
         RAISSAT Community Impact Project · Digital Food Systems Platform
@@ -94,7 +88,7 @@ export default function PrivacyPage() {
         </section>
       </div>
 
-      <p className="text-xs text-gray-400 mt-10">Last updated: October 2026 (Draft — pending legal review)</p>
+      <p className="text-xs text-gray-400 mt-10">Last updated: October 2026</p>
     </main>
   )
 }

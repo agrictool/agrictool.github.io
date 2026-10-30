@@ -1,13 +1,20 @@
 import { useState } from 'react'
-import { doc, updateDoc } from 'firebase/firestore'
+import { doc, setDoc } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import { uploadToCloudinary, validateImage } from '../../lib/cloudinary'
 import { useAuth } from '../../contexts/AuthContext'
 import { useSettings } from '../../contexts/SettingsContext'
-import { Button, Alert, Input, Textarea } from '../../components/ui'
+import { Button, Alert, Input, Textarea, Spinner } from '../../components/ui'
 import { Save, Upload, Settings2, Image as ImageIcon } from 'lucide-react'
 
 export default function AdminSettingsPage() {
+  const { loading } = useSettings()
+  // Wait for saved settings to load so the form never starts from (and overwrites with) defaults
+  if (loading) return <Spinner label="Loading settings…" />
+  return <SettingsForm />
+}
+
+function SettingsForm() {
   const { profile } = useAuth()
   const { settings } = useSettings()
   const [saving, setSaving] = useState(false)
@@ -42,7 +49,7 @@ export default function AdminSettingsPage() {
     setError('')
     try {
       const now = new Date().toISOString()
-      await updateDoc(doc(db, 'programmeSettings', 'current'), {
+      await setDoc(doc(db, 'programmeSettings', 'current'), {
         programmeTitle:       form.programmeTitle,
         programmeDate:        form.programmeDate,
         programmeLocation:    form.programmeLocation,
@@ -50,19 +57,26 @@ export default function AdminSettingsPage() {
         projectDescription:   form.projectDescription,
         contactEmail:         form.contactEmail  || null,
         contactPhone:         form.contactPhone  || null,
-        'certificateSettings.projectLeadName':       form.projectLeadName,
-        'certificateSettings.projectLeadTitle':      form.projectLeadTitle,
-        'certificateSettings.partnerSignatoryName':  form.partnerSignatoryName,
-        'certificateSettings.partnerSignatoryTitle': form.partnerSignatoryTitle,
-        'certificateSettings.idPrefix':              form.idPrefix,
-        'certificateSettings.coveringTopics':        form.coveringTopics,
+        certificateSettings: {
+          projectLeadName:      form.projectLeadName,
+          projectLeadTitle:     form.projectLeadTitle,
+          partnerSignatoryName:  form.partnerSignatoryName,
+          partnerSignatoryTitle: form.partnerSignatoryTitle,
+          idPrefix:             form.idPrefix,
+          coveringTopics:       form.coveringTopics,
+        },
         updatedAt:  now,
         updatedBy:  profile.uid,
-      })
+      }, { merge: true })
       setSuccess('Settings saved successfully.')
       setTimeout(() => setSuccess(''), 4000)
     } catch (e) {
-      setError('Failed to save settings. Please try again.')
+      const code = (e as { code?: string }).code
+      setError(
+        code === 'permission-denied'
+          ? 'Save blocked: this account is not recognised as an admin in the database (check the admins collection).'
+          : `Failed to save settings${code ? ` (${code})` : ''}. Please try again.`,
+      )
       console.error(e)
     } finally {
       setSaving(false)
@@ -83,20 +97,18 @@ export default function AdminSettingsPage() {
     setError('')
     try {
       const result = await uploadToCloudinary(file, 'settings', logoKey)
-      await updateDoc(doc(db, 'programmeSettings', 'current'), {
+      await setDoc(doc(db, 'programmeSettings', 'current'), {
         [`${logoKey}Url`]: result.url,
         updatedAt: new Date().toISOString(),
         updatedBy: profile.uid,
-      })
+      }, { merge: true })
       setSuccess(
         `${logoKey === 'raiissatLogo' ? 'RAISSAT' : 'Collaborator'} logo uploaded successfully.`,
       )
       setTimeout(() => setSuccess(''), 4000)
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Upload failed.'
-      setError(msg.includes('Cloudinary')
-        ? 'Logo upload failed — please check your connection and try again.'
-        : msg)
+      setError(msg)
       console.error(e)
     } finally {
       setUploading(null)

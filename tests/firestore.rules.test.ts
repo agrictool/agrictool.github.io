@@ -270,6 +270,30 @@ describe('toolkitEntries/{toolId}', () => {
       updatedAt: new Date().toISOString(),
     }))
   })
+  it('anonymous can submit a valid PENDING tool', async () => {
+    const db = makeAnonCtx().firestore()
+    await assertSucceeds(setDoc(doc(db, 'toolkitEntries', 'tool-new'), {
+      toolName: 'Test Tool', category: 'Crop Production', toolType: 'Mobile App',
+      costType: 'Free', function: 'Does something useful.', status: 'pending',
+      imageUrl: '', users: [], keywords: [],
+    }))
+  })
+  it('anonymous cannot submit an already-approved tool', async () => {
+    const db = makeAnonCtx().firestore()
+    await assertFails(setDoc(doc(db, 'toolkitEntries', 'tool-new'), {
+      toolName: 'Test Tool', category: 'Crop Production', toolType: 'Mobile App',
+      costType: 'Free', function: 'Does something useful.', status: 'approved',
+      imageUrl: '', users: [], keywords: [],
+    }))
+  })
+  it('anonymous cannot submit a tool with a non-Cloudinary image URL', async () => {
+    const db = makeAnonCtx().firestore()
+    await assertFails(setDoc(doc(db, 'toolkitEntries', 'tool-new'), {
+      toolName: 'Test Tool', category: 'Crop Production', toolType: 'Mobile App',
+      costType: 'Free', function: 'Does something useful.', status: 'pending',
+      imageUrl: 'https://evil.example.com/x.png', users: [], keywords: [],
+    }))
+  })
   it('admin can delete a tool', async () => {
     const db = makeAdminCtx().firestore()
     await assertSucceeds(deleteDoc(doc(db, 'toolkitEntries', 'tool-002')))
@@ -389,6 +413,14 @@ describe('toolkitPrivate/{toolId}', () => {
   it('participant cannot read private tool data', async () => {
     const db = makeParticipantCtx().firestore()
     await assertFails(getDoc(doc(db, 'toolkitPrivate', 'tool-001')))
+  })
+  it('anonymous can create (but not read) private contributor details', async () => {
+    const db = makeAnonCtx().firestore()
+    await assertSucceeds(setDoc(doc(db, 'toolkitPrivate', 'tool-new'), {
+      contributorName: 'Jane', contributorOrg: null, contactEmail: 'jane@example.com',
+      moderationNote: null, reviewedBy: null, reviewedAt: null,
+    }))
+    await assertFails(getDoc(doc(db, 'toolkitPrivate', 'tool-new')))
   })
   it('admin can read private tool data', async () => {
     await testEnv.withSecurityRulesDisabled(async ctx => {

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { doc, updateDoc, addDoc, collection } from 'firebase/firestore'
+import { doc, setDoc, addDoc, collection } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useSettings } from '../../contexts/SettingsContext'
@@ -139,11 +139,11 @@ export default function AdminPhasesPage() {
     setError('')
     try {
       const now = new Date().toISOString()
-      await updateDoc(doc(db, 'programmeSettings', 'current'), {
+      await setDoc(doc(db, 'programmeSettings', 'current'), {
         [key]: newState,
         updatedAt: now,
         updatedBy: profile.uid,
-      })
+      }, { merge: true })
       // Audit log
       await addDoc(collection(db, 'adminAuditLogs'), {
         actor: profile.uid,

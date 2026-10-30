@@ -1,22 +1,13 @@
 import { useState, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { collection, doc, setDoc } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import { uploadToCloudinary, validateImage } from '../../lib/cloudinary'
 import { useAuth } from '../../contexts/AuthContext'
 import { Input, Select, Textarea, Button, Alert, Card } from '../../components/ui'
 import { Upload, X, CheckCircle2, PlusCircle } from 'lucide-react'
+import { CATEGORIES } from '../../lib/constants'
 
-const CATEGORIES = [
-  'Crop Production','Livestock Production','Fisheries and Aquaculture',
-  'Remote Sensing and GIS','Agricultural Extension and Advisory Services',
-  'Agricultural Economics, Farm Management and Agribusiness',
-  'Soil Science and Land Resources Management',
-  'Water Resources Management and Irrigation',
-  'Food Processing and Analysis Technologies',
-  'Food Safety and Traceability','Food and Nutrition',
-  'Supply Chain and Logistics','Agricultural Data and Analytics',
-  'Agricultural and Food Research','Other / Emerging Technologies',
-]
 const TOOL_TYPES = ['Mobile App','GIS','Software/Web Platform','Digital Equipment','Data Analysis Tool']
 const USER_TYPES = [
   'Students','Farmers','Researchers','Agronomists','Food Scientists',
@@ -46,6 +37,7 @@ const EMPTY: FormData = {
 
 export default function ContributePage() {
   const { firebaseUser } = useAuth()
+  const navigate = useNavigate()
   const [form, setForm] = useState<FormData>(EMPTY)
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
@@ -154,9 +146,14 @@ export default function ContributePage() {
     } catch (e) {
       console.error(e)
       const msg = e instanceof Error ? e.message : 'Submission failed.'
-      setServerError(msg.includes('Cloudinary')
-        ? 'Image upload failed — please check your connection and try again.'
-        : 'Submission failed. Please check your connection and try again.')
+      const code = (e as { code?: string }).code
+      setServerError(
+        msg.includes('Cloudinary')
+          ? `Image upload failed: ${msg}`
+          : code === 'permission-denied'
+            ? 'The database rejected this submission (permission denied). Please contact the administrator.'
+            : `Submission failed (${code ?? msg}). Please try again.`,
+      )
     } finally {
       setSubmitting(false)
     }
@@ -178,7 +175,7 @@ export default function ContributePage() {
             }}>
               <PlusCircle className="w-4 h-4" /> Submit Another Tool
             </Button>
-            <Button variant="outline" onClick={() => window.location.href = '/toolkit'}>
+            <Button variant="outline" onClick={() => navigate('/toolkit')}>
               Explore the Toolkit
             </Button>
           </div>

@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useSettings } from '../../contexts/SettingsContext'
-import { Button } from '../../components/ui'
+import { ButtonLink } from '../../components/ui'
 
 const KEY_AREAS = [
   { icon: Satellite,    label: 'Precision Agriculture & GIS',       desc: 'Satellite imagery, drone mapping, IoT sensors, and remote sensing for crop and soil monitoring.' },
@@ -64,38 +64,28 @@ export default function HomePage() {
             <div className="flex flex-wrap gap-3">
               {!firebaseUser ? (
                 <>
-                  <Link to="/register">
-                    <Button size="lg" variant="primary">
+                  <ButtonLink to="/register" size="lg" variant="primary">
                       Create Participant Account
                       <ArrowRight className="w-4 h-4" />
-                    </Button>
-                  </Link>
-                  <Link to="/login">
-                    <Button size="lg" variant="outline" className="border-white/30 text-white hover:bg-white/10">
+                    </ButtonLink>
+                  <ButtonLink to="/login" size="lg" variant="outline" className="border-white/30 text-white hover:bg-white/10">
                       Log In
-                    </Button>
-                  </Link>
+                    </ButtonLink>
                 </>
               ) : (
-                <Link to="/dashboard">
-                  <Button size="lg" variant="primary">
+                <ButtonLink to="/dashboard" size="lg" variant="primary">
                     My Dashboard
                     <ArrowRight className="w-4 h-4" />
-                  </Button>
-                </Link>
+                  </ButtonLink>
               )}
-              <Link to="/contribute">
-                <Button size="lg" variant="outline" className="border-white/30 text-white hover:bg-white/10">
+              <ButtonLink to="/contribute" size="lg" variant="outline" className="border-white/30 text-white hover:bg-white/10">
                   <FlaskConical className="w-4 h-4" />
                   Contribute a Digital Tool
-                </Button>
-              </Link>
-              <Link to="/toolkit">
-                <Button size="lg" variant="outline" className="border-white/30 text-white hover:bg-white/10">
+                </ButtonLink>
+              <ButtonLink to="/toolkit" size="lg" variant="outline" className="border-white/30 text-white hover:bg-white/10">
                   <BookOpen className="w-4 h-4" />
                   Explore the Toolkit
-                </Button>
-              </Link>
+                </ButtonLink>
             </div>
           </div>
         </div>
@@ -200,12 +190,10 @@ export default function HomePage() {
           </div>
           {!firebaseUser && (
             <div className="text-center mt-10">
-              <Link to="/register">
-                <Button size="lg" variant="primary">
+              <ButtonLink to="/register" size="lg" variant="primary">
                   Register Now
                   <ArrowRight className="w-4 h-4" />
-                </Button>
-              </Link>
+                </ButtonLink>
             </div>
           )}
         </div>
@@ -224,12 +212,10 @@ export default function HomePage() {
                 Browse our curated directory of digital tools across agriculture and food systems.
               </p>
             </div>
-            <Link to="/toolkit">
-              <Button variant="outline">
+            <ButtonLink to="/toolkit" variant="outline">
                 View Full Directory
                 <ArrowRight className="w-4 h-4" />
-              </Button>
-            </Link>
+              </ButtonLink>
           </div>
 
           {/* Live toolkit entries injected in Stage 5 */}

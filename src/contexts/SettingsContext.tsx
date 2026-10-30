@@ -50,7 +50,15 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     const ref = doc(db, 'programmeSettings', 'current')
     const unsub = onSnapshot(ref, (snap) => {
       if (snap.exists()) {
-        setSettings({ ...DEFAULT_SETTINGS, ...(snap.data() as Partial<ProgrammeSettings>) })
+        const data = snap.data() as Partial<ProgrammeSettings>
+        setSettings({
+          ...DEFAULT_SETTINGS,
+          ...data,
+          certificateSettings: {
+            ...DEFAULT_SETTINGS.certificateSettings,
+            ...(data.certificateSettings ?? {}),
+          },
+        })
       }
       setLoading(false)
     }, () => {

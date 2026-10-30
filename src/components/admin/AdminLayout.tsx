@@ -19,7 +19,7 @@ const NAV = [
 
 export default function AdminLayout() {
   return (
-    <div className="flex min-h-[calc(100vh-64px)]">
+    <div className="flex flex-col md:flex-row w-full min-h-[calc(100vh-64px)]">
       {/* Sidebar */}
       <aside className="hidden md:flex flex-col w-56 bg-[#12304A] border-r border-white/10 flex-shrink-0">
         <div className="p-4 border-b border-white/10">
@@ -66,7 +66,7 @@ export default function AdminLayout() {
       </div>
 
       {/* Content */}
-      <main className="flex-1 overflow-auto bg-[#F9FBF9]">
+      <main className="flex-1 min-w-0 overflow-auto bg-[#F9FBF9]">
         <Outlet />
       </main>
     </div>

@@ -34,6 +34,19 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'participant';
     }
 
+    // A brand-new public tool submission: pending only, size-limited, images only from Cloudinary
+    function validNewTool() {
+      let d = request.resource.data;
+      return d.status == 'pending'
+        && d.toolName is string && d.toolName.size() > 0 && d.toolName.size() <= 200
+        && d['function'] is string && d['function'].size() <= 500
+        && d.category is string
+        && d.toolType is string
+        && d.costType in ['Free', 'Freemium', 'Premium']
+        && !('approvedAt' in d)
+        && (d.imageUrl == '' || d.imageUrl.matches('https://res[.]cloudinary[.]com/.*'));
+    }
+
     // ── Public read-only settings ─────────────────────────────────────────────
     match /programmeSettings/current {
       allow read: if true;
@@ -106,19 +119,21 @@ service cloud.firestore {
     // ── Toolkit entries (public fields) ──────────────────────────────────────
     match /toolkitEntries/{toolId} {
       allow read: if resource.data.status == 'approved' || isAdmin();
-      // New submissions via Function (Blaze) or contributor with approved account
-      allow create: if isSignedIn() &&
-        request.resource.data.status == 'pending' &&
-        (
-          isAdmin() ||
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.contributorApproved == true
-        );
+      // Anyone can submit a PENDING tool; it stays invisible until an admin approves it.
+      allow create: if isAdmin() || validNewTool();
       allow update, delete: if isAdmin();
     }
 
     // Toolkit private data (contributor PII, moderation notes)
     match /toolkitPrivate/{toolId} {
-      allow read, write: if isAdmin();
+      // Contributor details can be written once by the submitter; only admins can read or change them.
+      allow create: if isAdmin() || (
+        request.resource.data.keys().hasOnly(
+          ['contributorName', 'contributorOrg', 'contactEmail', 'moderationNote', 'reviewedBy', 'reviewedAt'])
+        && request.resource.data.moderationNote == null
+        && request.resource.data.reviewedBy == null
+      );
+      allow read, update, delete: if isAdmin();
     }
 
     // Toolkit categories

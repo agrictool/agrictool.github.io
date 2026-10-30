@@ -5,6 +5,7 @@ import { db } from '../../lib/firebase'
 import { Badge, Spinner, Card } from '../../components/ui'
 import { Search, X, ExternalLink, ChevronRight, Filter, Image as ImageIcon } from 'lucide-react'
 import type { ToolkitEntry, CostType, ToolType } from '../../types'
+import { CATEGORIES } from '../../lib/constants'
 
 const PAGE_SIZE = 24
 const COST_TYPES: CostType[] = ['Free', 'Freemium', 'Premium']
@@ -101,6 +102,7 @@ export default function ToolkitDirectoryPage() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [lastDoc, setLastDoc] = useState<DocumentSnapshot | null>(null)
   const [hasMore, setHasMore] = useState(false)
+  const [loadError, setLoadError] = useState('')
 
   const [searchTerm, setSearchTerm] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
@@ -109,20 +111,6 @@ export default function ToolkitDirectoryPage() {
   const [showFilters, setShowFilters] = useState(false)
 
   const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null)
-  const [categories, setCategories] = useState<string[]>([])
-
-  // Load categories
-  useEffect(() => {
-    getDocs(collection(db, 'toolkitCategories')).then(snap => {
-      const cats = snap.docs.map(d => (d.data() as { name: string }).name)
-      setCategories(cats.length ? cats : [
-        'Crop Production','Livestock Production','Fisheries and Aquaculture',
-        'Remote Sensing and GIS','Food Processing and Analysis Technologies',
-        'Food Safety and Traceability','Supply Chain and Logistics',
-        'Agricultural Data and Analytics','Agricultural and Food Research',
-      ])
-    })
-  }, [])
 
   // Load tools
   useEffect(() => {
@@ -132,6 +120,7 @@ export default function ToolkitDirectoryPage() {
 
   const loadTools = async (reset = false) => {
     try {
+      setLoadError('')
       let q = query(
         collection(db, 'toolkitEntries'),
         where('status', '==', 'approved'),
@@ -150,6 +139,12 @@ export default function ToolkitDirectoryPage() {
       setHasMore(snap.docs.length === PAGE_SIZE)
     } catch (e) {
       console.error('Failed to load toolkit entries', e)
+      const code = (e as { code?: string }).code
+      setLoadError(
+        code === 'failed-precondition'
+          ? 'This filter combination needs a database index that has not been created yet. Please tell the administrator.'
+          : 'Could not load tools. Please check your connection and try again.',
+      )
     } finally {
       setLoading(false)
       setLoadingMore(false)
@@ -236,7 +231,7 @@ export default function ToolkitDirectoryPage() {
               <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)}
                 className="w-full border border-[#DDE3E7] rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[#2E7D32]">
                 <option value="">All Categories</option>
-                {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
             <div>
@@ -273,6 +268,10 @@ export default function ToolkitDirectoryPage() {
           </div>
         )}
       </div>
+
+      {loadError && (
+        <div className="mb-4 p-3 text-sm bg-[#FFEBEE] text-[#C62828] border border-[#C62828]/30 rounded-lg">{loadError}</div>
+      )}
 
       {/* Grid */}
       {loading ? (

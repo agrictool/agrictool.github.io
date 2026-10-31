@@ -96,7 +96,8 @@ function SettingsForm() {
     setUploading(logoKey)
     setError('')
     try {
-      const result = await uploadToCloudinary(file, 'settings', logoKey)
+      // Unique name each time: unsigned Cloudinary uploads cannot overwrite an existing file
+      const result = await uploadToCloudinary(file, 'settings', `${logoKey}-${Date.now()}`)
       await setDoc(doc(db, 'programmeSettings', 'current'), {
         [`${logoKey}Url`]: result.url,
         updatedAt: new Date().toISOString(),
@@ -170,7 +171,7 @@ function SettingsForm() {
       {/* ── Organisation Logos ────────────────────────────────────────────── */}
       <Section icon={ImageIcon} title="Organisation Logos">
         <p className="text-xs text-[#5A6472] -mt-2">
-          Logos appear on the homepage and certificate. Preferred: square PNG with
+          Logos appear on the website header, footer, homepage and certificates. To add more collaborating organisations, use Admin → Collaborators. Preferred: square PNG with
           transparent background. Max 2 MB. JPG, PNG or WebP accepted.
           Images are stored on Cloudinary (free).
         </p>

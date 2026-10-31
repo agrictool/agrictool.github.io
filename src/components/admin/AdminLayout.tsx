@@ -1,7 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import {
   LayoutDashboard, Users, ClipboardList, BarChart2,
-  Trophy, BookOpen, ToggleLeft, Award, Settings
+  Trophy, BookOpen, ToggleLeft, Award, Settings, Building2
 } from 'lucide-react'
 
 const NAV = [
@@ -14,6 +14,7 @@ const NAV = [
   { to: '/admin/toolkit',       label: 'Toolkit Moderation',     icon: BookOpen },
   { to: '/admin/phases',        label: 'Programme Phases',       icon: ToggleLeft },
   { to: '/admin/certificates',  label: 'Certificates',           icon: Award },
+  { to: '/admin/collaborators', label: 'Collaborators',         icon: Building2 },
   { to: '/admin/settings',      label: 'Settings',               icon: Settings },
 ]
 

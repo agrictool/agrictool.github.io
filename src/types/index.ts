@@ -216,3 +216,14 @@ export interface AuditLogEntry {
   timestamp: string
   metadata?: Record<string, string | number | boolean>
 }
+
+// ── Collaborating / contributing organisations ───────────────────────────────
+export type PartnerType = 'Collaborator' | 'Contributing Organisation'
+
+export interface Partner {
+  id: string
+  name: string
+  type: PartnerType
+  logoUrl?: string
+  createdAt: string
+}

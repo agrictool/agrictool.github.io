@@ -88,8 +88,13 @@ service cloud.firestore {
     // ── Survey responses ──────────────────────────────────────────────────────
     match /surveyResponses/{responseId} {
       // Participant can read their own responses only
-      allow read: if isSignedIn() &&
-        (resource.data.userId == request.auth.uid || isAdmin());
+      // Decided from the document ID (uid_pre / uid_post), NOT resource.data, so that checking
+      // for a response that does not exist yet returns "not found" instead of permission-denied.
+      allow read: if isSignedIn() && (
+        responseId == request.auth.uid + '_pre' ||
+        responseId == request.auth.uid + '_post' ||
+        isAdmin()
+      );
 
       // Create: deterministic ID = uid_pre or uid_post, phase must be open, no existing response
       allow create: if isActive() && isParticipant() &&
@@ -134,6 +139,12 @@ service cloud.firestore {
         && request.resource.data.reviewedBy == null
       );
       allow read, update, delete: if isAdmin();
+    }
+
+    // Collaborating / contributing organisations shown on the public site
+    match /collaborators/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
     // Toolkit categories

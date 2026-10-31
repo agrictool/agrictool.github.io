@@ -6,6 +6,8 @@ import {
 import { useAuth } from '../../contexts/AuthContext'
 import { useSettings } from '../../contexts/SettingsContext'
 import { ButtonLink } from '../../components/ui'
+import OrgCard from '../../components/OrgCard'
+import { usePartners } from '../../lib/usePartners'
 
 const KEY_AREAS = [
   { icon: Satellite,    label: 'Precision Agriculture & GIS',       desc: 'Satellite imagery, drone mapping, IoT sensors, and remote sensing for crop and soil monitoring.' },
@@ -27,6 +29,7 @@ const HOW_IT_WORKS = [
 export default function HomePage() {
   const { firebaseUser } = useAuth()
   const { settings } = useSettings()
+  const { partners } = usePartners()
 
   return (
     <main>
@@ -237,23 +240,21 @@ export default function HomePage() {
           <h2 id="partners-heading" className="text-sm font-semibold text-[#5A6472] uppercase tracking-widest mb-6">
             Participating Organisations
           </h2>
-          <div className="flex flex-wrap items-center justify-center gap-8">
-            {/* Logo slots — admin uploads actual logos in Settings */}
-            {[
-              { abbr: 'RAISSAT', full: 'Research Applied Institute for Sustainability in Science, Agriculture and Technology' },
-              { abbr: 'FUTA', full: 'Federal University of Technology, Akure' },
-            ].map(org => (
-              <div key={org.abbr} className="flex flex-col items-center gap-2">
-                <div className="w-16 h-16 bg-white border border-[#DDE3E7] rounded-lg flex items-center justify-center shadow-sm">
-                  <span className="text-xs font-bold text-[#12304A]">{org.abbr}</span>
-                </div>
-                <p className="text-xs text-[#5A6472] max-w-[120px] text-center leading-tight">{org.full}</p>
-              </div>
+          <div className="flex flex-wrap items-start justify-center gap-8">
+            <OrgCard
+              name="Research Applied Institute for Sustainability in Science, Agriculture and Technology"
+              logoUrl={settings.raiissatLogoUrl}
+              caption="Organiser"
+            />
+            <OrgCard
+              name={settings.collaboratorName}
+              logoUrl={settings.collaboratorLogoUrl}
+              caption="Collaborator"
+            />
+            {partners.map(p => (
+              <OrgCard key={p.id} name={p.name} logoUrl={p.logoUrl} caption={p.type} />
             ))}
           </div>
-          <p className="text-xs text-gray-400 mt-6 italic">
-            Organisation logos can be uploaded by the administrator in Settings.
-          </p>
         </div>
       </section>
     </main>

@@ -4,7 +4,7 @@ import { db } from '../../lib/firebase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useSettings } from '../../contexts/SettingsContext'
 import { Button, Alert, PhaseStatusBadge, Card } from '../../components/ui'
-import { ToggleLeft, ToggleRight, AlertTriangle, Clock, User } from 'lucide-react'
+import { ToggleLeft, ToggleRight, AlertTriangle, Clock, User, RotateCcw } from 'lucide-react'
 import type { PhaseState } from '../../types'
 
 interface PhaseConfig {
@@ -59,7 +59,11 @@ function PhaseToggle({ phase, currentState, onToggle, saving }: {
     setPendingState(null)
   }
 
-  const warningText = pendingState === 'open' ? phase.warningOpen : phase.warningClose
+  const warningText =
+    pendingState === 'open' ? phase.warningOpen
+    : pendingState === 'closed' ? phase.warningClose
+    : 'Resetting returns this phase to "Not yet opened". Participants will see it as unavailable until you open it again. Existing responses and certificates are preserved.'
+  const actionLabel = pendingState === 'open' ? 'Open' : pendingState === 'closed' ? 'Close' : 'Reset'
 
   return (
     <Card className="p-5">
@@ -92,6 +96,16 @@ function PhaseToggle({ phase, currentState, onToggle, saving }: {
               <ToggleLeft className="w-4 h-4" /> Close Phase
             </Button>
           )}
+          {currentState !== 'not_open' && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleClick('not_open')}
+              disabled={saving}
+            >
+              <RotateCcw className="w-4 h-4" /> Reset to Not Opened
+            </Button>
+          )}
         </div>
       </div>
 
@@ -101,14 +115,14 @@ function PhaseToggle({ phase, currentState, onToggle, saving }: {
             <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
             <div>
               <p className="text-sm font-semibold text-amber-900 mb-1">
-                Confirm: {pendingState === 'open' ? 'Open' : 'Close'} this phase?
+                Confirm: {actionLabel} this phase?
               </p>
               <p className="text-sm text-amber-800">{warningText}</p>
             </div>
           </div>
           <div className="flex gap-2">
             <Button variant="primary" size="sm" onClick={handleConfirm} loading={saving}>
-              Yes, {pendingState === 'open' ? 'Open' : 'Close'} Phase
+              Yes, {actionLabel} Phase
             </Button>
             <Button variant="ghost" size="sm" onClick={() => { setConfirming(false); setPendingState(null) }}>
               Cancel
@@ -152,9 +166,12 @@ export default function AdminPhasesPage() {
         timestamp: now,
         metadata: { newState, previousState: settings[key as keyof typeof settings] },
       })
-      setSuccess(`Phase updated to "${newState}" successfully.`)
+      setSuccess(
+        `Phase set to "${newState === 'not_open' ? 'Not yet opened' : newState === 'open' ? 'Open' : 'Closed'}" successfully.`,
+      )
     } catch (e) {
-      setError('Failed to update phase. Please try again.')
+      const code = (e as { code?: string }).code
+      setError(`Failed to update phase${code ? ` (${code})` : ''}. Please try again.`)
       console.error(e)
     } finally {
       setSaving(false)

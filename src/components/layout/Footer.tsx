@@ -1,8 +1,10 @@
 import { Link } from 'react-router-dom'
 import { useSettings } from '../../contexts/SettingsContext'
+import { usePartners } from '../../lib/usePartners'
 
 export default function Footer() {
   const { settings } = useSettings()
+  const { partners } = usePartners()
 
   return (
     <footer className="bg-[#12304A] text-white mt-auto">
@@ -11,9 +13,15 @@ export default function Footer() {
           {/* Identity */}
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <div className="w-8 h-8 bg-[#D4AF37] rounded flex items-center justify-center flex-shrink-0">
-                <span className="text-[#12304A] font-bold text-xs">R</span>
-              </div>
+              {settings.raiissatLogoUrl ? (
+                <span className="w-9 h-9 bg-white rounded p-0.5 flex items-center justify-center flex-shrink-0">
+                  <img src={settings.raiissatLogoUrl} alt="RAISSAT logo" className="max-w-full max-h-full object-contain" />
+                </span>
+              ) : (
+                <div className="w-8 h-8 bg-[#D4AF37] rounded flex items-center justify-center flex-shrink-0">
+                  <span className="text-[#12304A] font-bold text-xs">R</span>
+                </div>
+              )}
               <span className="font-bold text-sm">RAISSAT</span>
             </div>
             <p className="text-xs text-blue-200 leading-relaxed mb-2">
@@ -27,7 +35,26 @@ export default function Footer() {
           {/* Collaborator */}
           <div>
             <h3 className="text-sm font-semibold text-[#D4AF37] mb-3">In Collaboration With</h3>
-            <p className="text-xs text-blue-200 leading-relaxed">{settings.collaboratorName}</p>
+            <ul className="space-y-3">
+              <li className="flex items-center gap-2">
+                {settings.collaboratorLogoUrl && (
+                  <span className="w-9 h-9 bg-white rounded p-0.5 flex items-center justify-center flex-shrink-0">
+                    <img src={settings.collaboratorLogoUrl} alt="" className="max-w-full max-h-full object-contain" />
+                  </span>
+                )}
+                <span className="text-xs text-blue-200 leading-relaxed">{settings.collaboratorName}</span>
+              </li>
+              {partners.map(p => (
+                <li key={p.id} className="flex items-center gap-2">
+                  {p.logoUrl && (
+                    <span className="w-9 h-9 bg-white rounded p-0.5 flex items-center justify-center flex-shrink-0">
+                      <img src={p.logoUrl} alt="" className="max-w-full max-h-full object-contain" />
+                    </span>
+                  )}
+                  <span className="text-xs text-blue-200 leading-relaxed">{p.name}</span>
+                </li>
+              ))}
+            </ul>
           </div>
 
           {/* Links */}

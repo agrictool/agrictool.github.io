@@ -4,9 +4,11 @@ import { Menu, X, LogOut, LayoutDashboard, Settings, BookOpen, ChevronDown } fro
 import { signOut } from 'firebase/auth'
 import { auth } from '../../lib/firebase'
 import { useAuth } from '../../contexts/AuthContext'
+import { useSettings } from '../../contexts/SettingsContext'
 
 export default function Navbar() {
   const { firebaseUser, profile, isAdmin } = useAuth()
+  const { settings } = useSettings()
   const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
@@ -27,9 +29,13 @@ export default function Navbar() {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2E7D32] rounded">
-            <div className="w-8 h-8 bg-[#12304A] rounded flex items-center justify-center flex-shrink-0">
-              <span className="text-[#D4AF37] font-bold text-xs">R</span>
-            </div>
+            {settings.raiissatLogoUrl ? (
+              <img src={settings.raiissatLogoUrl} alt="RAISSAT logo" className="h-9 w-9 object-contain flex-shrink-0" />
+            ) : (
+              <div className="w-8 h-8 bg-[#12304A] rounded flex items-center justify-center flex-shrink-0">
+                <span className="text-[#D4AF37] font-bold text-xs">R</span>
+              </div>
+            )}
             <div className="hidden sm:block">
               <p className="text-xs font-bold text-[#12304A] leading-tight">RAISSAT</p>
               <p className="text-xs text-[#5A6472] leading-tight">Digital Food Systems</p>

@@ -16,9 +16,40 @@ function randomBase36(len: number): string {
 }
 
 
+async function fetchImageDataUrl(url?: string): Promise<string | null> {
+  if (!url) return null
+  try {
+    const res = await fetch(url)
+    if (!res.ok) return null
+    const blob = await res.blob()
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = () => reject(new Error('Could not read image'))
+      reader.readAsDataURL(blob)
+    })
+  } catch {
+    return null
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function placeLogo(pdf: any, dataUrl: string, x: number, y: number, w: number, h: number) {
+  try {
+    const props = pdf.getImageProperties(dataUrl)
+    const scale = Math.min(w / props.width, h / props.height)
+    const dw = props.width * scale
+    const dh = props.height * scale
+    pdf.addImage(dataUrl, props.fileType, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh)
+  } catch (e) {
+    console.error('Could not place logo on certificate', e)
+  }
+}
+
 function drawCertPDF(
   certRecord: CertificateRecord,
-  settings: ReturnType<typeof useSettings>['settings']
+  settings: ReturnType<typeof useSettings>['settings'],
+  logos: { raissat: string | null; collaborator: string | null } = { raissat: null, collaborator: null },
 ): jsPDF {
   const cs = settings.certificateSettings
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -58,32 +89,44 @@ function drawCertPDF(
   pdf.rect(0, H - 2, W, 2, 'F')
 
   // ── RAISSAT Logo area (top left) ────────────────────────────────────────────
-  pdf.setFillColor(255, 255, 255)
-  pdf.setGState(pdf.GState({ opacity: 0.1 }))
-  pdf.roundedRect(12, 6, 32, 16, 2, 2, 'F')
-  pdf.setGState(pdf.GState({ opacity: 1 }))
-  pdf.setTextColor(255, 255, 255)
-  pdf.setFont('helvetica', 'bold')
-  pdf.setFontSize(8)
-  pdf.text('RAISSAT', 16, 14)
-  pdf.setFont('helvetica', 'normal')
-  pdf.setFontSize(5.5)
-  pdf.setTextColor(180, 210, 230)
-  pdf.text('Community Impact Project', 16, 18)
+  if (logos.raissat) {
+    pdf.setFillColor(255, 255, 255)
+    pdf.roundedRect(12, 6, 32, 16, 2, 2, 'F')
+    placeLogo(pdf, logos.raissat, 13, 7, 30, 14)
+  } else {
+    pdf.setFillColor(255, 255, 255)
+    pdf.setGState(pdf.GState({ opacity: 0.1 }))
+    pdf.roundedRect(12, 6, 32, 16, 2, 2, 'F')
+    pdf.setGState(pdf.GState({ opacity: 1 }))
+    pdf.setTextColor(255, 255, 255)
+    pdf.setFont('helvetica', 'bold')
+    pdf.setFontSize(8)
+    pdf.text('RAISSAT', 16, 14)
+    pdf.setFont('helvetica', 'normal')
+    pdf.setFontSize(5.5)
+    pdf.setTextColor(180, 210, 230)
+    pdf.text('Community Impact Project', 16, 18)
+  }
 
   // ── Collaborator logo area (top right) ──────────────────────────────────────
-  pdf.setFillColor(255, 255, 255)
-  pdf.setGState(pdf.GState({ opacity: 0.1 }))
-  pdf.roundedRect(W - 44, 6, 32, 16, 2, 2, 'F')
-  pdf.setGState(pdf.GState({ opacity: 1 }))
-  pdf.setTextColor(255, 255, 255)
-  pdf.setFont('helvetica', 'bold')
-  pdf.setFontSize(8)
-  pdf.text('FUTA', W - 40, 14)
-  pdf.setFont('helvetica', 'normal')
-  pdf.setFontSize(5.5)
-  pdf.setTextColor(180, 210, 230)
-  pdf.text('Akure, Nigeria', W - 40, 18)
+  if (logos.collaborator) {
+    pdf.setFillColor(255, 255, 255)
+    pdf.roundedRect(W - 44, 6, 32, 16, 2, 2, 'F')
+    placeLogo(pdf, logos.collaborator, W - 43, 7, 30, 14)
+  } else {
+    pdf.setFillColor(255, 255, 255)
+    pdf.setGState(pdf.GState({ opacity: 0.1 }))
+    pdf.roundedRect(W - 44, 6, 32, 16, 2, 2, 'F')
+    pdf.setGState(pdf.GState({ opacity: 1 }))
+    pdf.setTextColor(255, 255, 255)
+    pdf.setFont('helvetica', 'bold')
+    pdf.setFontSize(8)
+    pdf.text('FUTA', W - 40, 14)
+    pdf.setFont('helvetica', 'normal')
+    pdf.setFontSize(5.5)
+    pdf.setTextColor(180, 210, 230)
+    pdf.text('Akure, Nigeria', W - 40, 18)
+  }
 
   // ── Certificate title ────────────────────────────────────────────────────────
   pdf.setFont('helvetica', 'bold')
@@ -225,7 +268,11 @@ export default function CertificatePage() {
     (!certRecord || certRecord.status === 'issued')
 
   const generateAndDownload = async (record: CertificateRecord) => {
-    const pdf = drawCertPDF(record, settings)
+    const [raissat, collaborator] = await Promise.all([
+      fetchImageDataUrl(settings.raiissatLogoUrl),
+      fetchImageDataUrl(settings.collaboratorLogoUrl),
+    ])
+    const pdf = drawCertPDF(record, settings, { raissat, collaborator })
     pdf.save(`Certificate_${record.participantId}_${record.certificateId}.pdf`)
   }
 

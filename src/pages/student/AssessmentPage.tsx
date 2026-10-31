@@ -71,23 +71,28 @@ export default function AssessmentPage() {
   useEffect(() => {
     if (!profile) return
     async function checkSubmission() {
-      const docId = `${profile!.uid}_${surveyType}`
-      const snap = await getDoc(doc(db, 'surveyResponses', docId))
-      if (snap.exists()) {
-        setAlreadySubmitted(true)
-        setStep('submitted')
+      try {
+        const docId = `${profile!.uid}_${surveyType}`
+        const snap = await getDoc(doc(db, 'surveyResponses', docId))
+        if (snap.exists()) {
+          setAlreadySubmitted(true)
+          setStep('submitted')
+          return
+        }
+        // Load draft
+        const draftRaw = localStorage.getItem(DRAFT_KEY(profile!.uid, surveyType))
+        if (draftRaw) {
+          try {
+            const parsed = JSON.parse(draftRaw)
+            setAnswers(prev => ({ ...prev, ...parsed }))
+          } catch { /* ignore corrupt draft */ }
+        }
+      } catch (e) {
+        console.error(e)
+        setError('Could not check your earlier submission. You can still fill the form; please refresh if problems continue.')
+      } finally {
         setLoading(false)
-        return
       }
-      // Load draft
-      const draftRaw = localStorage.getItem(DRAFT_KEY(profile!.uid, surveyType))
-      if (draftRaw) {
-        try {
-          const parsed = JSON.parse(draftRaw)
-          setAnswers(prev => ({ ...prev, ...parsed }))
-        } catch { /* ignore corrupt draft */ }
-      }
-      setLoading(false)
     }
     checkSubmission()
   }, [profile, surveyType])
@@ -137,6 +142,8 @@ export default function AssessmentPage() {
       if (msg === 'permission-denied') {
         if (phaseState !== 'open') {
           setError('This assessment phase is now closed. Your responses could not be saved.')
+        } else if (profile.role === 'admin') {
+          setError('Administrator accounts cannot submit assessments. Please test with a separate participant account.')
         } else {
           setError('You have already submitted this assessment.')
         }
@@ -229,6 +236,15 @@ export default function AssessmentPage() {
         <div className="mb-6">
           <Alert variant="error" title="Please answer all required questions">
             {missingIds.length} required question{missingIds.length > 1 ? 's' : ''} still need{missingIds.length === 1 ? 's' : ''} an answer.
+          </Alert>
+        </div>
+      )}
+
+      {profile.role === 'admin' && (
+        <div className="mb-6">
+          <Alert variant="info" title="You are signed in as an administrator">
+            You can preview this assessment, but only participant accounts can submit it. To test a full
+            submission, register and use a separate participant account.
           </Alert>
         </div>
       )}

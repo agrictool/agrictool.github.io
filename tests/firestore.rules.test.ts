@@ -432,3 +432,31 @@ describe('toolkitPrivate/{toolId}', () => {
     await assertSucceeds(getDoc(doc(db, 'toolkitPrivate', 'tool-001')))
   })
 })
+
+// ── Survey responses: existence checks must not be blocked ────────────────────
+describe('surveyResponses read by document ID', () => {
+  it('participant can check for their own (non-existent) response', async () => {
+    const db = makeParticipantCtx().firestore()
+    await assertSucceeds(getDoc(doc(db, 'surveyResponses', `${PARTICIPANT_UID}_pre`)))
+  })
+  it('participant cannot read another participant\'s response', async () => {
+    const db = makeParticipantCtx().firestore()
+    await assertFails(getDoc(doc(db, 'surveyResponses', `${OTHER_UID}_pre`)))
+  })
+})
+
+// ── Collaborators ─────────────────────────────────────────────────────────────
+describe('collaborators/{id}', () => {
+  it('anyone can read collaborators', async () => {
+    const db = makeAnonCtx().firestore()
+    await assertSucceeds(getDoc(doc(db, 'collaborators', 'c1')))
+  })
+  it('participant cannot add a collaborator', async () => {
+    const db = makeParticipantCtx().firestore()
+    await assertFails(setDoc(doc(db, 'collaborators', 'c1'), { name: 'X', type: 'Collaborator' }))
+  })
+  it('admin can add a collaborator', async () => {
+    const db = makeAdminCtx().firestore()
+    await assertSucceeds(setDoc(doc(db, 'collaborators', 'c1'), { name: 'X', type: 'Collaborator' }))
+  })
+})

@@ -1,94 +1,69 @@
 # RAISSAT Digital Food Systems Platform
 
-**Project:** Preparing the Next Generation for Digital Food Systems: AI, Data, and Innovation from Farm to Fork  
-**Lead:** Oladipo Esther Modupe · RAISSAT Community Impact Project · FUTA, Akure, Nigeria
+Web platform for a one-day training programme that prepares FUTA students for digital food systems, covering AI, data and innovation from farm to fork. Participants register, take a before-and-after assessment and earn a certificate. Anyone can browse a directory of digital agriculture tools.
 
----
+[Live site](https://agrictool.github.io/) · [Report an issue](../../issues)
 
-## What Is Built
+## About
 
-A complete, responsive, secure web application with three connected systems:
+The platform supports the RAISSAT Community Impact Project at the Federal University of Technology, Akure (FUTA), Nigeria, led by Oladipo Esther Modupe. It has three connected parts:
 
-| System | Status |
-|---|---|
-| Programme Management Portal — registration, auth, assessments, dashboard, certificates | ✅ Complete |
-| Digital Food Systems Toolkit Directory — search, filter, contribute, moderate, lightbox | ✅ Complete |
-| Administrator Dashboard — phases, participants, analytics, challenge, exports, settings | ✅ Complete |
+- **Programme portal** for participants: registration, assessments and certificates.
+- **Toolkit directory** that anyone can search, with a form to suggest new tools.
+- **Administrator dashboard** for the organisers.
 
-### All Pages
-| Route | Description |
-|---|---|
-| `/` | Public homepage — hero, about, key areas, how-it-works |
-| `/toolkit` | Searchable public toolkit directory with filters |
-| `/toolkit/:id` | Tool detail page |
-| `/contribute` | Tool submission portal |
-| `/register` | Participant registration with Firebase Auth |
-| `/login` | Login |
-| `/reset-password` | Password reset |
-| `/dashboard` | Student dashboard with phase status and progress |
-| `/assessment/pre` | 30-question pre-training assessment |
-| `/assessment/post` | 30-question post-training assessment |
-| `/certificate` | Certificate eligibility and A4 PDF download |
-| `/privacy` | Draft privacy notice (NDPA 2023 compatible) |
-| `/admin` | Admin overview with live counts |
-| `/admin/participants` | Searchable, sortable, exportable participant table |
-| `/admin/pre-survey` | Pre-assessment submissions + reopen |
-| `/admin/post-survey` | Post-assessment submissions + reopen |
-| `/admin/impact` | Charts — confidence, tool familiarity, career influence |
-| `/admin/challenge` | Group challenge scoring (0–4 per criterion, max 20) |
-| `/admin/toolkit` | Toolkit moderation — approve, reject, edit, delete |
-| `/admin/phases` | Phase open/close controls with confirmation |
-| `/admin/certificates` | Certificate list, revoke, reinstate, export |
-| `/admin/settings` | Programme details, logos, certificate config |
+## Features
 
----
+For visitors
+- Search and filter a public directory of digital agriculture tools, with a detail page for each
+- Suggest a tool for the directory; organisers review it before it appears
+- Read about six focus areas: precision agriculture and GIS, AI and data analytics, food safety and traceability, supply chain and logistics, livestock and aquaculture technology, and agricultural data and research tools
 
-## Quick Start
+For participants
+- Create an account and sign in, with password reset
+- Follow the programme phases from a personal dashboard
+- Complete a pre-training and a post-training assessment, one attempt each
+- Download an A4 certificate once both assessments are done and the programme allows it
 
-```bash
-git clone <repo-url> && cd raissat-app
-npm install
-cp .env.example .env.local   # fill in Firebase values
-firebase emulators:start      # terminal 1
-npm run dev                   # terminal 2 → http://localhost:5173
+For organisers
+- See participants in a searchable, sortable table and export it
+- Review submitted assessments and reopen them if needed
+- See impact charts, score the group challenge, and review toolkit suggestions
+- Open and close programme phases, manage certificates and collaborators, and edit programme settings
+
+## Tech stack
+
+React · Vite · TypeScript · Tailwind CSS · React Router · Firebase (Authentication, Firestore, Storage) · Recharts · jsPDF · GitHub Actions and GitHub Pages
+
+## Privacy and security
+
+- Administrator access is granted outside the app, never through the website itself.
+- Database rules decide who can read and write. Phases, one-attempt assessments and certificate eligibility are enforced on the server, not only in the interface.
+- Private toolkit details are kept apart from public ones and can be read only by administrators.
+- Administrator actions are written to an append-only audit log.
+- No secret keys are stored in this repository. A draft privacy notice is on the site at [/privacy](https://agrictool.github.io/privacy).
+
+## Project structure
+
+```
+src/pages/       public, student, toolkit and admin pages
+src/components/  shared layout, forms and interface parts
+src/lib/         Firebase setup, constants and assessment questions
+firestore.rules  database access rules
+storage.rules    file storage access rules
+tests/           security rules tests
+scripts/         one-time administrator setup script
+.github/         automatic deploy to GitHub Pages
 ```
 
-See **DEPLOYMENT.md** for full setup, first-admin bootstrap, and production deployment.
+## For the project team
 
----
+Setup, first-administrator setup and deployment steps are in [DEPLOYMENT.md](DEPLOYMENT.md) and [SETUP_GUIDE.md](SETUP_GUIDE.md). How the system fits together is in [ARCHITECTURE.md](ARCHITECTURE.md).
 
-## Stack
+## Contributing
 
-- **React 18** + **Vite** + **TypeScript**
-- **Tailwind CSS v4**
-- **React Router v6**
-- **Firebase** — Auth, Firestore, Storage, Hosting
-- **Recharts** — analytics charts
-- **jsPDF** — A4 landscape certificate generation
-- **Lucide React** — icons
+Open an issue to report a bug or suggest an idea. Do not post personal details or participant data in issues.
 
----
+## Credits
 
-## Security Architecture
-
-- Admin role: custom claim via bootstrap script (never via UI)
-- Participant ID: server-side generation (FUTA-DFS-XXXXXX)
-- Phase enforcement: Firestore rules + server-side, not UI-only
-- Certificate eligibility: Firestore rules enforce both surveys + open phase
-- Duplicate survey prevention: deterministic doc ID (`uid_pre`, `uid_post`) + create-only rules
-- Audit log: append-only; every phase change, approval, and export logged
-- Private toolkit data: separate `toolkitPrivate` collection, admin-only
-- No secrets in client bundle; service account keys never committed
-
----
-
-## Scripts
-
-| Command | Purpose |
-|---|---|
-| `npm run dev` | Start dev server with HMR |
-| `npm run build` | Production build → `/dist` |
-| `npm run preview` | Preview production build locally |
-| `npm run test:rules` | Run Firestore security rules tests (needs emulator) |
-| `firebase deploy` | Deploy hosting + rules + indexes |
-| `node scripts/bootstrap-admin.cjs --uid=<UID>` | Grant admin role (run once) |
+Project lead: Oladipo Esther Modupe, RAISSAT Community Impact Project, FUTA, Akure. Icons: Lucide.

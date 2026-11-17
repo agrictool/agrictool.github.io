@@ -275,6 +275,14 @@ describe('toolkitEntries/{toolId}', () => {
     await assertSucceeds(setDoc(doc(db, 'toolkitEntries', 'tool-new'), {
       toolName: 'Test Tool', category: 'Crop Production', toolType: 'Mobile App',
       costType: 'Free', function: 'Does something useful.', status: 'pending',
+      imageUrl: 'https://res.cloudinary.com/demo/image/upload/logo.png', users: [], keywords: [],
+    }))
+  })
+  it('anonymous cannot submit a tool without an image', async () => {
+    const db = makeAnonCtx().firestore()
+    await assertFails(setDoc(doc(db, 'toolkitEntries', 'tool-new'), {
+      toolName: 'Test Tool', category: 'Crop Production', toolType: 'Mobile App',
+      costType: 'Free', function: 'Does something useful.', status: 'pending',
       imageUrl: '', users: [], keywords: [],
     }))
   })
@@ -283,7 +291,7 @@ describe('toolkitEntries/{toolId}', () => {
     await assertFails(setDoc(doc(db, 'toolkitEntries', 'tool-new'), {
       toolName: 'Test Tool', category: 'Crop Production', toolType: 'Mobile App',
       costType: 'Free', function: 'Does something useful.', status: 'approved',
-      imageUrl: '', users: [], keywords: [],
+      imageUrl: 'https://res.cloudinary.com/demo/image/upload/logo.png', users: [], keywords: [],
     }))
   })
   it('anonymous cannot submit a tool with a non-Cloudinary image URL', async () => {

@@ -34,7 +34,7 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'participant';
     }
 
-    // A brand-new public tool submission: pending only, size-limited, images only from Cloudinary
+    // A brand-new public tool submission: pending only, size-limited, a Cloudinary image is required
     function validNewTool() {
       let d = request.resource.data;
       return d.status == 'pending'
@@ -44,7 +44,9 @@ service cloud.firestore {
         && d.toolType is string
         && d.costType in ['Free', 'Freemium', 'Premium']
         && !('approvedAt' in d)
-        && (d.imageUrl == '' || d.imageUrl.matches('https://res[.]cloudinary[.]com/.*'));
+        // An image or logo is compulsory, and must be hosted on our Cloudinary account
+        && d.imageUrl is string
+        && d.imageUrl.matches('https://res[.]cloudinary[.]com/.*');
     }
 
     // ── Public read-only settings ─────────────────────────────────────────────

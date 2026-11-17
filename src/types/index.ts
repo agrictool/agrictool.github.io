@@ -147,6 +147,7 @@ export interface ToolkitEntry {
   users: string[]
   toolType: ToolType
   imageUrl?: string
+  imagePublicId?: string | null
   imageType?: ImageType
   officialUrl?: string
   useCase?: string

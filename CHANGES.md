@@ -14,3 +14,9 @@
 9. **Assessment would not load** – the `surveyResponses` read rule depended on a document that does not exist yet, so the page hung on "Loading assessment…". The rule now uses the document ID. The page also no longer hangs if a read fails.
 10. **Phases** – added **Reset to Not Opened** (from Open or Closed) on Admin → Programme Phases.
 11. **Admin accounts** – admins can preview assessments but not submit; a banner and a clearer message now say so. Test submissions with a separate participant account.
+
+## Round 3 – Contributor form
+
+12. **Admin full editing** – Admin → Toolkit Moderation → Edit now opens the same complete form contributors use: every field, image replace, and the private contributor details. The tool keeps its status. A "+ Add a tool" button opens the contributor form for admins.
+13. **Image required** – the image/logo is compulsory: marked "Required", blocked in the form, and enforced in `firestore.rules` (a Cloudinary image URL must be present).
+14. **Submit another flow** – after each submission: "Submitted Successfully! Kindly proceed to submit a second one" with a **Submit Second One / Third One / …** button. Contributor name, organisation and email are kept between submissions. The form and the admin editor share one component (`ToolFormFields.tsx`).

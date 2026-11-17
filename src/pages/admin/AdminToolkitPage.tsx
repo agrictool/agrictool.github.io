@@ -2,9 +2,15 @@ import { useState, useEffect } from 'react'
 import { collection, getDocs, doc, updateDoc, deleteDoc, addDoc, getDoc, setDoc } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import { useAuth } from '../../contexts/AuthContext'
-import { Badge, Button, Alert, Spinner } from '../../components/ui'
+import { Badge, Button, Alert, Spinner, ButtonLink } from '../../components/ui'
 import { CheckCircle, XCircle, Trash2, Edit2, ExternalLink } from 'lucide-react'
 import type { ToolkitEntry, ToolkitPrivate, ToolStatus } from '../../types'
+import ToolFormFields from '../../components/ToolFormFields'
+import { uploadToCloudinary } from '../../lib/cloudinary'
+import {
+  EMPTY_TOOL_FORM, parseKeywords, toolFormFromEntry, validateToolForm,
+  type ToolFormData, type ToolFormErrors,
+} from '../../lib/toolForm'
 
 type Tab = 'pending' | 'approved' | 'rejected' | 'all'
 
@@ -25,7 +31,9 @@ export default function AdminToolkitPage() {
   const [error, setError] = useState('')
   const [moderationNote, setModerationNote] = useState('')
   const [editMode, setEditMode] = useState(false)
-  const [editData, setEditData] = useState<Partial<ToolkitEntry>>({})
+  const [editForm, setEditForm] = useState<ToolFormData>(EMPTY_TOOL_FORM)
+  const [editImageFile, setEditImageFile] = useState<File | null>(null)
+  const [editErrors, setEditErrors] = useState<ToolFormErrors>({})
 
   useEffect(() => {
     getDocs(collection(db, 'toolkitEntries'))
@@ -53,7 +61,8 @@ export default function AdminToolkitPage() {
     setSelected({ ...entry, private: priv })
     setModerationNote(priv?.moderationNote ?? '')
     setEditMode(false)
-    setEditData({})
+    setEditImageFile(null)
+    setEditErrors({})
   }
 
   const handleStatusChange = async (toolId: string, newStatus: ToolStatus) => {
@@ -87,17 +96,95 @@ export default function AdminToolkitPage() {
     } catch (e) { console.error(e); setError(`Action failed (${(e as { code?: string }).code ?? 'unknown error'}).`) } finally { setActionLoading(null) }
   }
 
-  const handleEdit = async (toolId: string) => {
-    if (!profile || !editMode) return
+  const handleStartEdit = () => {
+    if (!selected) return
+    setEditForm(toolFormFromEntry(selected, selected.private))
+    setEditImageFile(null)
+    setEditErrors({})
+    setError('')
+    setEditMode(true)
+  }
+
+  const handleCancelEdit = () => {
+    setEditMode(false)
+    setEditImageFile(null)
+    setEditErrors({})
+  }
+
+  const handleSaveEdit = async () => {
+    if (!profile || !selected) return
+    const errs = validateToolForm(editForm, !!editImageFile || !!selected.imageUrl)
+    setEditErrors(errs)
+    if (Object.keys(errs).length > 0) return
+
+    const toolId = selected.id
     setActionLoading(toolId)
+    setError('')
     try {
-      const updates = { ...editData, updatedAt: new Date().toISOString() }
+      const now = new Date().toISOString()
+      let imageUrl = selected.imageUrl ?? ''
+      let imagePublicId: string | null = selected.imagePublicId ?? null
+      if (editImageFile) {
+        // Unique name: unsigned Cloudinary uploads cannot overwrite an existing file
+        const result = await uploadToCloudinary(editImageFile, 'toolkit-images', `${toolId}_${Date.now()}`)
+        imageUrl = result.url
+        imagePublicId = result.publicId || null
+      }
+
+      const updates = {
+        toolName:    editForm.toolName.trim(),
+        category:    editForm.category,
+        costType:    editForm.costType,
+        costDetails: editForm.costDetails.trim(),
+        function:    editForm.functionDesc.trim(),
+        users:       editForm.selectedUsers,
+        toolType:    editForm.toolType,
+        imageUrl,
+        imagePublicId,
+        imageType:   editForm.imageType || null,
+        officialUrl: editForm.officialUrl.trim() || null,
+        useCase:     editForm.useCase.trim() || null,
+        keywords:    parseKeywords(editForm.keywords),
+        updatedAt:   now,
+      }
       await updateDoc(doc(db, 'toolkitEntries', toolId), updates)
-      setEntries(prev => prev.map(e => e.id === toolId ? { ...e, ...updates } : e))
+
+      const priv = {
+        contributorName: editForm.contributorName.trim() || null,
+        contributorOrg:  editForm.contributorOrg.trim()  || null,
+        contactEmail:    editForm.contactEmail.trim()     || null,
+      }
+      await setDoc(doc(db, 'toolkitPrivate', toolId), priv, { merge: true })
+
+      await addDoc(collection(db, 'adminAuditLogs'), {
+        actor: profile.uid, action: 'toolkit_edited', target: toolId, timestamp: now,
+      })
+
+      setEntries(prev => prev.map(e => e.id === toolId ? ({ ...e, ...updates } as unknown as EntryWithPrivate) : e))
+      setSelected(prev => prev ? ({
+        ...prev, ...updates,
+        private: {
+          ...prev.private,
+          contributorName: priv.contributorName ?? undefined,
+          contributorOrg:  priv.contributorOrg  ?? undefined,
+          contactEmail:    priv.contactEmail    ?? undefined,
+        },
+      } as unknown as EntryWithPrivate) : prev)
       setEditMode(false)
-      setSuccess('Tool updated. Returning to review status.')
-      setTimeout(() => setSuccess(''), 3000)
-    } catch (e) { console.error(e); setError(`Action failed (${(e as { code?: string }).code ?? 'unknown error'}).`) } finally { setActionLoading(null) }
+      setEditImageFile(null)
+      setSuccess('Tool updated. Its review status is unchanged.')
+      setTimeout(() => setSuccess(''), 4000)
+    } catch (e) {
+      console.error(e)
+      const msg = e instanceof Error ? e.message : ''
+      setError(
+        msg.includes('Cloudinary')
+          ? `Image upload failed: ${msg}`
+          : `Could not save changes (${(e as { code?: string }).code ?? 'unknown error'}).`,
+      )
+    } finally {
+      setActionLoading(null)
+    }
   }
 
   const handleDelete = async (toolId: string) => {
@@ -125,7 +212,10 @@ export default function AdminToolkitPage() {
   return (
     <div className="p-6 max-w-6xl">
       <h1 className="text-xl font-bold text-[#12304A] mb-1">Toolkit Moderation</h1>
-      <p className="text-sm text-[#5A6472] mb-5">Review, approve, edit and manage submitted digital tools.</p>
+      <p className="text-sm text-[#5A6472] mb-3">Review, approve, edit and manage submitted digital tools.</p>
+      <div className="mb-5">
+        <ButtonLink to="/contribute" variant="outline" size="sm">+ Add a tool (contributor form)</ButtonLink>
+      </div>
 
       {success && <div className="mb-4"><Alert variant="success">{success}</Alert></div>}
       {error && <div className="mb-4"><Alert variant="error">{error}</Alert></div>}
@@ -174,7 +264,7 @@ export default function AdminToolkitPage() {
 
         {/* Detail panel */}
         {selected && (
-          <div className="bg-white border border-[#DDE3E7] rounded-xl p-5 space-y-4 max-h-[80vh] overflow-y-auto">
+          <div className={`bg-white border border-[#DDE3E7] rounded-xl p-5 space-y-4 max-h-[80vh] overflow-y-auto ${editMode ? 'lg:col-span-2' : ''}`}>
             <div className="flex items-start justify-between">
               <div>
                 <h2 className="font-bold text-[#12304A]">{selected.toolName}</h2>
@@ -183,30 +273,32 @@ export default function AdminToolkitPage() {
               <Badge variant={STATUS_BADGE[selected.status]}>{selected.status}</Badge>
             </div>
 
-            {selected.imageUrl && (
+            {selected.imageUrl && !editMode && (
               <img src={selected.imageUrl} alt={selected.toolName}
                 className="max-h-28 rounded border border-[#DDE3E7] object-contain" />
             )}
 
             {editMode ? (
-              <div className="space-y-3">
-                <div>
-                  <label className="text-xs font-medium text-[#12304A]">Tool Name</label>
-                  <input value={editData.toolName ?? selected.toolName}
-                    onChange={e => setEditData(d => ({ ...d, toolName: e.target.value }))}
-                    className="mt-1 w-full border border-[#DDE3E7] rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[#2E7D32]" />
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-[#12304A]">Function Description</label>
-                  <textarea value={editData.function ?? selected.function}
-                    onChange={e => setEditData(d => ({ ...d, function: e.target.value }))}
-                    rows={3}
-                    className="mt-1 w-full border border-[#DDE3E7] rounded px-3 py-1.5 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-[#2E7D32]" />
-                </div>
-                <div className="flex gap-2">
-                  <Button variant="primary" size="sm" loading={!!actionLoading}
-                    onClick={() => handleEdit(selected.id)}>Save</Button>
-                  <Button variant="ghost" size="sm" onClick={() => { setEditMode(false); setEditData({}) }}>Cancel</Button>
+              <div className="space-y-4">
+                <Alert variant="info">
+                  You are editing every field a contributor can fill in, including the image and private contributor details.
+                  The tool keeps its current status ({selected.status}).
+                </Alert>
+                <ToolFormFields
+                  form={editForm}
+                  setForm={setEditForm}
+                  errors={editErrors}
+                  imageFile={editImageFile}
+                  existingImageUrl={selected.imageUrl}
+                  onImageChange={file => { setEditImageFile(file); if (file) setEditErrors(er => ({ ...er, image: undefined })) }}
+                  onImageError={msg => setEditErrors(er => ({ ...er, image: msg }))}
+                  idPrefix="admin-edit"
+                />
+                <div className="flex flex-wrap gap-2 pt-2">
+                  <Button variant="primary" loading={actionLoading === selected.id} onClick={handleSaveEdit}>
+                    Save Changes
+                  </Button>
+                  <Button variant="ghost" onClick={handleCancelEdit}>Cancel</Button>
                 </div>
               </div>
             ) : (
@@ -241,6 +333,7 @@ export default function AdminToolkitPage() {
               </>
             )}
 
+            {!editMode && (<>
             {/* Moderation note */}
             <div>
               <label className="text-xs font-medium text-[#12304A]">Internal Moderation Note</label>
@@ -263,7 +356,7 @@ export default function AdminToolkitPage() {
                   <XCircle className="w-4 h-4" /> Reject
                 </Button>
               )}
-              <Button variant="outline" size="sm" onClick={() => setEditMode(!editMode)}>
+              <Button variant="outline" size="sm" onClick={handleStartEdit}>
                 <Edit2 className="w-4 h-4" /> Edit
               </Button>
               <Button variant="ghost" size="sm" loading={actionLoading === selected.id}
@@ -271,6 +364,7 @@ export default function AdminToolkitPage() {
                 <Trash2 className="w-4 h-4 text-[#C62828]" />
               </Button>
             </div>
+            </>)}
           </div>
         )}
       </div>

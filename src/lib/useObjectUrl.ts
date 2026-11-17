@@ -1,0 +1,16 @@
+import { useEffect, useState } from 'react'
+
+/** Turns a chosen File into a temporary preview URL and cleans it up afterwards. */
+export function useObjectUrl(file: File | null): string | null {
+  const [url, setUrl] = useState<string | null>(null)
+  useEffect(() => {
+    if (!file) {
+      setUrl(null)
+      return undefined
+    }
+    const u = URL.createObjectURL(file)
+    setUrl(u)
+    return () => URL.revokeObjectURL(u)
+  }, [file])
+  return url
+}

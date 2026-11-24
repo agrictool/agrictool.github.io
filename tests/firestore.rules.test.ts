@@ -16,7 +16,7 @@ import {
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
 import {
-  doc, getDoc, setDoc, updateDoc, deleteDoc, collection, addDoc,
+  doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, addDoc, writeBatch,
 } from 'firebase/firestore'
 
 let testEnv: RulesTestEnvironment
@@ -466,5 +466,88 @@ describe('collaborators/{id}', () => {
   it('admin can add a collaborator', async () => {
     const db = makeAdminCtx().firestore()
     await assertSucceeds(setDoc(doc(db, 'collaborators', 'c1'), { name: 'X', type: 'Collaborator' }))
+  })
+})
+
+// ── Invitation-only registration (maximum 60) ─────────────────────────────────
+describe('invitation-only registration', () => {
+  const HASH = 'a'.repeat(64)
+  const NEW_UID = 'new-user-uid-777'
+
+  async function seed(opts: { used?: boolean; count?: number } = {}) {
+    await testEnv.withSecurityRulesDisabled(async ctx => {
+      const db = ctx.firestore()
+      await setDoc(doc(db, 'inviteCodes', HASH), { used: !!opts.used, createdAt: 'x' })
+      await setDoc(doc(db, 'inviteCodeSecrets', HASH), { code: 'ABCDEF', createdAt: 'x' })
+      await setDoc(doc(db, 'registrationCounter', 'state'), { count: opts.count ?? 0 })
+    })
+  }
+
+  function registration(db: ReturnType<ReturnType<typeof makeAnonCtx>['firestore']>, uid: string, newCount: number, gender: string | undefined = 'Male') {
+    const profile: Record<string, unknown> = {
+      uid, participantId: 'FUTA-DFS-TEST1', fullName: 'Test User', email: 't@example.com',
+      department: 'Food Science & Technology', academicLevel: '200L', inviteCodeHash: HASH,
+      role: 'participant', accountStatus: 'active', consentAt: 'x', createdAt: 'x', updatedAt: 'x',
+    }
+    if (gender !== undefined) profile.gender = gender
+    const b = writeBatch(db)
+    b.update(doc(db, 'inviteCodes', HASH), { used: true, usedAt: 'now' })
+    b.update(doc(db, 'registrationCounter', 'state'), { count: newCount })
+    b.set(doc(db, 'users', uid), profile)
+    return b
+  }
+  const newUserCtx = (uid = NEW_UID) => testEnv.authenticatedContext(uid, {})
+
+  it('a valid, unused code registers successfully', async () => {
+    await seed()
+    await assertSucceeds(registration(newUserCtx().firestore(), NEW_UID, 1).commit())
+  })
+  it('a used code is rejected', async () => {
+    await seed({ used: true })
+    await assertFails(registration(newUserCtx().firestore(), NEW_UID, 1).commit())
+  })
+  it('the same code cannot be used by a second person', async () => {
+    await seed()
+    await assertSucceeds(registration(newUserCtx().firestore(), NEW_UID, 1).commit())
+    await assertFails(registration(newUserCtx('second-user').firestore(), 'second-user', 2).commit())
+  })
+  it('registration is blocked once 60 have registered', async () => {
+    await seed({ count: 60 })
+    await assertFails(registration(newUserCtx().firestore(), NEW_UID, 61).commit())
+  })
+  it('gender is compulsory (Male or Female only)', async () => {
+    await seed()
+    await assertFails(registration(newUserCtx().firestore(), NEW_UID, 1, undefined).commit())
+    await assertFails(registration(newUserCtx().firestore(), NEW_UID, 1, 'Other').commit())
+  })
+  it('a profile cannot be created without consuming a code', async () => {
+    await seed()
+    const db = newUserCtx().firestore()
+    await assertFails(setDoc(doc(db, 'users', NEW_UID), {
+      uid: NEW_UID, role: 'participant', accountStatus: 'active', gender: 'Male', inviteCodeHash: HASH,
+    }))
+  })
+  it('the counter cannot jump by more than 1 or be reset', async () => {
+    await seed({ count: 5 })
+    const db = newUserCtx().firestore()
+    await assertFails(registration(db, NEW_UID, 8).commit())
+    await assertFails(updateDoc(doc(db, 'registrationCounter', 'state'), { count: 0 }))
+  })
+  it('anyone can check one code by its hash but cannot list codes', async () => {
+    await seed()
+    const db = makeAnonCtx().firestore()
+    await assertSucceeds(getDoc(doc(db, 'inviteCodes', HASH)))
+    await assertFails(getDocs(collection(db, 'inviteCodes')))
+  })
+  it('only admins can read the real codes', async () => {
+    await seed()
+    await assertFails(getDoc(doc(makeAnonCtx().firestore(), 'inviteCodeSecrets', HASH)))
+    await assertFails(getDoc(doc(makeParticipantCtx().firestore(), 'inviteCodeSecrets', HASH)))
+    await assertSucceeds(getDoc(doc(makeAdminCtx().firestore(), 'inviteCodeSecrets', HASH)))
+  })
+  it('a participant cannot change their own gender or invite code hash', async () => {
+    const db = makeParticipantCtx().firestore()
+    await assertFails(updateDoc(doc(db, 'users', PARTICIPANT_UID), { gender: 'Female' }))
+    await assertFails(updateDoc(doc(db, 'users', PARTICIPANT_UID), { inviteCodeHash: 'x' }))
   })
 })

@@ -30,6 +30,9 @@ export interface UserProfile {
   updatedAt: string
   accountStatus: 'active' | 'deactivated'
   contributorApproved?: boolean
+  gender?: 'Male' | 'Female'
+  /** SHA-256 hash of the invitation code used to register (the readable code is admin-only) */
+  inviteCodeHash?: string
 }
 
 // ── Programme Settings ────────────────────────────────────────────────────────

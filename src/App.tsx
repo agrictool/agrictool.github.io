@@ -36,6 +36,7 @@ import AdminPhasesPage from './pages/admin/AdminPhasesPage'
 import AdminCertificatesPage from './pages/admin/AdminCertificatesPage'
 import AdminSettingsPage from './pages/admin/AdminSettingsPage'
 import AdminCollaboratorsPage from './pages/admin/AdminCollaboratorsPage'
+import AdminInvitesPage from './pages/admin/AdminInvitesPage'
 
 function PublicLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -89,6 +90,7 @@ export default function App() {
               <Route path="toolkit" element={<AdminToolkitPage />} />
               <Route path="phases" element={<AdminPhasesPage />} />
               <Route path="certificates" element={<AdminCertificatesPage />} />
+              <Route path="invitations" element={<AdminInvitesPage />} />
               <Route path="collaborators" element={<AdminCollaboratorsPage />} />
               <Route path="settings" element={<AdminSettingsPage />} />
             </Route>

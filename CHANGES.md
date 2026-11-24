@@ -20,3 +20,9 @@
 12. **Admin full editing** – Admin → Toolkit Moderation → Edit now opens the same complete form contributors use: every field, image replace, and the private contributor details. The tool keeps its status. A "+ Add a tool" button opens the contributor form for admins.
 13. **Image required** – the image/logo is compulsory: marked "Required", blocked in the form, and enforced in `firestore.rules` (a Cloudinary image URL must be present).
 14. **Submit another flow** – after each submission: "Submitted Successfully! Kindly proceed to submit a second one" with a **Submit Second One / Third One / …** button. Contributor name, organisation and email are kept between submissions. The form and the admin editor share one component (`ToolFormFields.tsx`).
+
+## Round 4 – Invitation-only registration (max 60)
+
+15. **Invitation codes** – new required "Invitation Code (Required)" field and "Gender (Required)" (Male/Female) on the registration page. Codes are hashed and stored in Firestore, never in the site files. Used once, in an atomic transaction; the 60 limit is enforced by `firestore.rules`.
+16. **Admin → Invitation Codes** – seed the 60 codes once, see used/unused, who used each and when, gender totals, and export CSV (with gender). Participants page also shows gender.
+17. See `INVITATION_SYSTEM.md`.

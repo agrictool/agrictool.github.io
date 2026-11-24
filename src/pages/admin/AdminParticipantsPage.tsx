@@ -16,7 +16,7 @@ function escapeCsvCell(v: unknown): string {
 
 function toCSV(rows: UserProfile[]): string {
   const BOM = '\uFEFF'
-  const headers = ['participantId','fullName','email','department','academicLevel','phone','role','accountStatus','createdAt']
+  const headers = ['participantId','fullName','email','department','academicLevel','gender','phone','role','accountStatus','createdAt']
   const lines = rows.map(r => headers.map(h => escapeCsvCell(r[h as keyof UserProfile])).join(','))
   return BOM + [headers.join(','), ...lines].join('\r\n')
 }
@@ -144,6 +144,7 @@ export default function AdminParticipantsPage() {
                     <span className="flex items-center gap-1">Department <SortIcon k="department" /></span>
                   </th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-[#5A6472] hidden lg:table-cell">Level</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-[#5A6472] hidden lg:table-cell">Gender</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-[#5A6472]">Status</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-[#5A6472] hidden lg:table-cell cursor-pointer" onClick={() => toggleSort('createdAt')}>
                     <span className="flex items-center gap-1">Registered <SortIcon k="createdAt" /></span>
@@ -153,7 +154,7 @@ export default function AdminParticipantsPage() {
               </thead>
               <tbody className="divide-y divide-[#DDE3E7]">
                 {paged.length === 0 ? (
-                  <tr><td colSpan={7} className="text-center py-8 text-[#5A6472] text-sm">No participants found.</td></tr>
+                  <tr><td colSpan={8} className="text-center py-8 text-[#5A6472] text-sm">No participants found.</td></tr>
                 ) : paged.map(p => (
                   <tr key={p.uid} className="hover:bg-[#F9FBF9] transition-colors">
                     <td className="px-4 py-3 font-mono text-xs text-[#12304A]">{p.participantId}</td>
@@ -163,6 +164,7 @@ export default function AdminParticipantsPage() {
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell text-xs text-[#374151]">{p.department}</td>
                     <td className="px-4 py-3 hidden lg:table-cell text-xs text-[#374151]">{p.academicLevel}</td>
+                    <td className="px-4 py-3 hidden lg:table-cell text-xs text-[#374151]">{p.gender ?? '—'}</td>
                     <td className="px-4 py-3">
                       <Badge variant={p.accountStatus === 'active' ? 'green' : 'red'}>
                         {p.accountStatus}

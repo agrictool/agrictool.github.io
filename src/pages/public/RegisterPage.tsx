@@ -1,10 +1,17 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { createUserWithEmailAndPassword } from 'firebase/auth'
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
+import {
+  createUserWithEmailAndPassword, signInWithEmailAndPassword, deleteUser,
+  type User, type UserCredential,
+} from 'firebase/auth'
+import { doc, getDoc, runTransaction, serverTimestamp } from 'firebase/firestore'
 import { auth, db } from '../../lib/firebase'
 import { Input, Select, Button, Alert } from '../../components/ui'
 import type { Department, AcademicLevel } from '../../types'
+import {
+  MAX_REGISTRATIONS, INVITE_MESSAGES, cleanCodeInput, isValidCodeFormat, hashCode,
+  getLockRemainingMs, recordWrongAttempt, clearAttempts,
+} from '../../lib/invite'
 
 const DEPARTMENTS: Department[] = [
   'Agricultural & Resource Economics',
@@ -28,7 +35,20 @@ function generateParticipantId(): string {
   return `FUTA-DFS-${suffix}`
 }
 
+type RegErrorKind = 'invalid' | 'used' | 'closed' | 'not-ready' | 'email-exists'
+
+class RegistrationError extends Error {
+  kind: RegErrorKind
+  constructor(kind: RegErrorKind) {
+    super(kind)
+    this.name = 'RegistrationError'
+    this.kind = kind
+  }
+}
+
 interface FormState {
+  invitationCode: string
+  gender: string
   fullName: string
   email: string
   phone: string
@@ -40,6 +60,8 @@ interface FormState {
 }
 
 interface FormErrors {
+  invitationCode?: string
+  gender?: string
   fullName?: string
   email?: string
   department?: string
@@ -52,12 +74,32 @@ interface FormErrors {
 export default function RegisterPage() {
   const navigate = useNavigate()
   const [form, setForm] = useState<FormState>({
+    invitationCode: '', gender: '',
     fullName: '', email: '', phone: '', department: '',
     academicLevel: '', password: '', confirmPassword: '', consent: false,
   })
   const [errors, setErrors] = useState<FormErrors>({})
   const [submitting, setSubmitting] = useState(false)
   const [serverError, setServerError] = useState('')
+  // 'checking' | 'open' | 'closed' | 'not-ready'
+  const [regStatus, setRegStatus] = useState<'checking' | 'open' | 'closed' | 'not-ready'>('checking')
+  const busy = useRef(false) // blocks double-clicks / re-submits while a registration is running
+
+  // Show "closed" up-front when all slots are taken (the database rules enforce this regardless)
+  useEffect(() => {
+    getDoc(doc(db, 'registrationCounter', 'state'))
+      .then(snap => {
+        if (!snap.exists()) setRegStatus('not-ready')
+        else if ((snap.data().count as number) >= MAX_REGISTRATIONS) setRegStatus('closed')
+        else setRegStatus('open')
+      })
+      .catch(() => setRegStatus('open'))
+  }, [])
+
+  function setCode(e: React.ChangeEvent<HTMLInputElement>) {
+    setForm(f => ({ ...f, invitationCode: cleanCodeInput(e.target.value) }))
+    setErrors(er => ({ ...er, invitationCode: undefined }))
+  }
 
   function set(field: keyof FormState) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -71,6 +113,9 @@ export default function RegisterPage() {
 
   function validate(): boolean {
     const e: FormErrors = {}
+    if (!form.invitationCode) e.invitationCode = 'An invitation code is required to register.'
+    else if (!isValidCodeFormat(form.invitationCode)) e.invitationCode = 'The invitation code has 6 letters.'
+    if (!form.gender) e.gender = 'Please select your gender.'
     if (!form.fullName.trim()) e.fullName = 'Full name is required.'
     if (!form.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
       e.email = 'A valid email address is required.'
@@ -85,41 +130,125 @@ export default function RegisterPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (busy.current) return
     setServerError('')
     if (!validate()) return
+
+    const lockMs = getLockRemainingMs()
+    if (lockMs > 0) {
+      setErrors(er => ({
+        ...er,
+        invitationCode: `Too many incorrect attempts. Please try again in ${Math.ceil(lockMs / 60000)} minute(s).`,
+      }))
+      return
+    }
+
+    busy.current = true
     setSubmitting(true)
+    let createdUser: User | null = null
     try {
-      const cred = await createUserWithEmailAndPassword(auth, form.email.trim(), form.password)
-      const uid = cred.user.uid
-      // Spark fallback: generate participant ID client-side and reserve it
+      const codeHash = await hashCode(form.invitationCode)
+      const inviteRef = doc(db, 'inviteCodes', codeHash)
+      const counterRef = doc(db, 'registrationCounter', 'state')
+
+      // 1. Check the code first, so no account is created for a bad code
+      const [inviteSnap, counterSnap] = await Promise.all([getDoc(inviteRef), getDoc(counterRef)])
+      if (!counterSnap.exists()) throw new RegistrationError('not-ready')
+      if ((counterSnap.data().count as number) >= MAX_REGISTRATIONS) throw new RegistrationError('closed')
+      if (!inviteSnap.exists()) throw new RegistrationError('invalid')
+      if (inviteSnap.data().used) throw new RegistrationError('used')
+
+      // 2. Create the login (or resume an earlier attempt that stopped before the profile was saved)
+      const email = form.email.trim()
+      let user: User
+      try {
+        const cred = await createUserWithEmailAndPassword(auth, email, form.password)
+        user = cred.user
+        createdUser = cred.user
+      } catch (err) {
+        if ((err as { code?: string }).code !== 'auth/email-already-in-use') throw err
+        let cred: UserCredential
+        try {
+          cred = await signInWithEmailAndPassword(auth, email, form.password)
+        } catch {
+          throw new RegistrationError('email-exists')
+        }
+        const existing = await getDoc(doc(db, 'users', cred.user.uid))
+        if (existing.exists()) throw new RegistrationError('email-exists')
+        user = cred.user
+      }
+
+      // 3. ONE atomic transaction: consume the code, add 1 to the counter, save the profile.
+      //    The database rules re-check every condition, so two people can never share a code
+      //    and the 60 limit can never be exceeded.
+      const uid = user.uid
       const participantId = generateParticipantId()
       const now = new Date().toISOString()
-      await setDoc(doc(db, 'users', uid), {
-        uid,
-        participantId,
-        fullName: form.fullName.trim(),
-        email: form.email.trim().toLowerCase(),
-        phone: form.phone.trim() || null,
-        department: form.department,
-        academicLevel: form.academicLevel,
-        role: 'participant',
-        consentAt: now,
-        createdAt: now,
-        updatedAt: now,
-        accountStatus: 'active',
+      await runTransaction(db, async tx => {
+        const inv = await tx.get(inviteRef)
+        const ctr = await tx.get(counterRef)
+        if (!ctr.exists()) throw new RegistrationError('not-ready')
+        const count = ctr.data().count as number
+        if (count >= MAX_REGISTRATIONS) throw new RegistrationError('closed')
+        if (!inv.exists()) throw new RegistrationError('invalid')
+        if (inv.data().used) throw new RegistrationError('used')
+
+        tx.update(inviteRef, { used: true, usedAt: now })
+        tx.update(counterRef, { count: count + 1 })
+        tx.set(doc(db, 'users', uid), {
+          uid,
+          participantId,
+          fullName: form.fullName.trim(),
+          email: email.toLowerCase(),
+          phone: form.phone.trim() || null,
+          gender: form.gender,
+          department: form.department,
+          academicLevel: form.academicLevel,
+          inviteCodeHash: codeHash,
+          role: 'participant',
+          consentAt: now,
+          createdAt: now,
+          updatedAt: now,
+          accountStatus: 'active',
+        })
+        tx.set(doc(db, 'participantIds', participantId), { uid, createdAt: serverTimestamp() })
       })
-      // Reserve the participant ID (Spark fallback, see ARCHITECTURE.md)
-      await setDoc(doc(db, 'participantIds', participantId), { uid, createdAt: serverTimestamp() })
+
+      clearAttempts()
       navigate('/dashboard', { state: { registered: true } })
     } catch (err: unknown) {
-      const code = (err as { code?: string }).code
-      if (code === 'auth/email-already-in-use')
-        setServerError('An account with this email already exists. Please log in.')
-      else if (code === 'auth/weak-password')
-        setServerError('Please choose a stronger password (at least 8 characters).')
-      else
-        setServerError('Registration failed. Please try again.')
+      // Registration failed: remove the login we just created so nothing is left half-done
+      if (createdUser) { try { await deleteUser(createdUser) } catch { /* ignore */ } }
+
+      if (err instanceof RegistrationError) {
+        if (err.kind === 'invalid') {
+          recordWrongAttempt()
+          setErrors(er => ({ ...er, invitationCode: INVITE_MESSAGES.invalid }))
+        } else if (err.kind === 'used') {
+          recordWrongAttempt()
+          setErrors(er => ({ ...er, invitationCode: INVITE_MESSAGES.used }))
+        } else if (err.kind === 'closed') {
+          setRegStatus('closed')
+        } else if (err.kind === 'not-ready') {
+          setRegStatus('not-ready')
+        } else {
+          setServerError('An account with this email already exists. Please log in.')
+        }
+      } else {
+        const code = (err as { code?: string }).code
+        if (code === 'auth/weak-password')
+          setServerError('Please choose a stronger password (at least 8 characters).')
+        else if (code === 'auth/invalid-email')
+          setServerError('Please enter a valid email address.')
+        else if (code === 'auth/too-many-requests')
+          setServerError('Too many attempts. Please wait a few minutes and try again.')
+        else if (code === 'permission-denied' || code === 'aborted' || code === 'failed-precondition')
+          setServerError('Registration could not be completed, and your invitation code has not been used. Please check the code and try again.')
+        else
+          setServerError('Registration failed. Please check your connection and try again.')
+      }
     } finally {
+      busy.current = false
       setSubmitting(false)
     }
   }
@@ -138,6 +267,17 @@ export default function RegisterPage() {
           </p>
         </div>
 
+        {regStatus === 'closed' || regStatus === 'not-ready' ? (
+          <div className="bg-white border border-[#DDE3E7] rounded-xl shadow-sm p-6 sm:p-8 text-center">
+            <Alert variant={regStatus === 'closed' ? 'info' : 'warning'}>
+              {regStatus === 'closed' ? INVITE_MESSAGES.closed : INVITE_MESSAGES.notReady}
+            </Alert>
+            <p className="text-center text-sm text-[#5A6472] mt-5">
+              Already registered?{' '}
+              <Link to="/login" className="text-[#2E7D32] font-medium hover:underline">Log in</Link>
+            </p>
+          </div>
+        ) : (
         <div className="bg-white border border-[#DDE3E7] rounded-xl shadow-sm p-6 sm:p-8">
           {serverError && (
             <div className="mb-5">
@@ -146,6 +286,24 @@ export default function RegisterPage() {
           )}
 
           <form onSubmit={handleSubmit} noValidate className="space-y-5">
+            <div className="bg-[#E8F5E9] border border-[#2E7D32]/30 rounded-lg p-4">
+              <Input
+                id="invitation-code"
+                label="Invitation Code (Required)"
+                placeholder="e.g. ABCDEF"
+                hint="Registration is by invitation only. Enter the 6-letter code you were given."
+                value={form.invitationCode}
+                onChange={setCode}
+                error={errors.invitationCode}
+                maxLength={6}
+                autoComplete="off"
+                autoCapitalize="characters"
+                spellCheck={false}
+                aria-required="true"
+                className="font-mono tracking-[0.3em] uppercase text-center text-lg"
+              />
+            </div>
+
             <Input
               label="Full Name"
               required
@@ -174,6 +332,17 @@ export default function RegisterPage() {
               value={form.phone}
               onChange={set('phone')}
               autoComplete="tel"
+            />
+
+            <Select
+              id="gender"
+              label="Gender (Required)"
+              placeholder="Select gender"
+              options={[{ value: 'Male', label: 'Male' }, { value: 'Female', label: 'Female' }]}
+              value={form.gender}
+              onChange={set('gender')}
+              error={errors.gender}
+              aria-required="true"
             />
 
             <Select
@@ -258,6 +427,7 @@ export default function RegisterPage() {
             <Link to="/login" className="text-[#2E7D32] font-medium hover:underline">Log in</Link>
           </p>
         </div>
+        )}
       </div>
     </main>
   )

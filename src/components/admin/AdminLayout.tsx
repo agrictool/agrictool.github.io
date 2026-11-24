@@ -1,12 +1,13 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import {
   LayoutDashboard, Users, ClipboardList, BarChart2,
-  Trophy, BookOpen, ToggleLeft, Award, Settings, Building2
+  Trophy, BookOpen, ToggleLeft, Award, Settings, Building2, KeyRound
 } from 'lucide-react'
 
 const NAV = [
   { to: '/admin',               label: 'Overview',              icon: LayoutDashboard, end: true },
   { to: '/admin/participants',  label: 'Participants',           icon: Users },
+  { to: '/admin/invitations',   label: 'Invitation Codes',       icon: KeyRound },
   { to: '/admin/pre-survey',    label: 'Pre-Assessment',         icon: ClipboardList },
   { to: '/admin/post-survey',   label: 'Post-Assessment',        icon: ClipboardList },
   { to: '/admin/impact',        label: 'Impact Analysis',        icon: BarChart2 },

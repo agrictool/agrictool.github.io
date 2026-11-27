@@ -8,7 +8,7 @@ const DEFAULT_SETTINGS: ProgrammeSettings = {
   postSurveyState: 'not_open',
   certificatePhaseState: 'not_open',
   programmeTitle: 'Preparing the Next Generation for Digital Food Systems: AI, Data, and Innovation from Farm to Fork',
-  programmeDate: 'October 16, 2026',
+  programmeDate: '27th November 2026',
   programmeLocation: 'Akure, Nigeria',
   collaboratorName: 'Federal University of Technology, Akure (FUTA), School of Agriculture and Agricultural Technology (SAAT)',
   requireGroupScoreForCertificate: false,

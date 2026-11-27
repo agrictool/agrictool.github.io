@@ -8,12 +8,14 @@ function initials(name: string): string {
 }
 
 /** A logo tile with the organisation name underneath. Falls back to initials when there is no logo. */
-export default function OrgCard({ name, logoUrl, caption }: {
+export default function OrgCard({ name, logoUrl, caption, href }: {
   name: string
   logoUrl?: string
   caption?: string
+  /** When given, the whole card links to this website (opens in a new tab) */
+  href?: string
 }) {
-  return (
+  const card = (
     <div className="flex flex-col items-center gap-2">
       <div className="w-20 h-20 bg-white border border-[#DDE3E7] rounded-lg flex items-center justify-center shadow-sm overflow-hidden p-1.5">
         {logoUrl ? (
@@ -25,5 +27,19 @@ export default function OrgCard({ name, logoUrl, caption }: {
       <p className="text-xs text-[#5A6472] max-w-[150px] text-center leading-tight">{name}</p>
       {caption && <p className="text-[10px] uppercase tracking-wide text-[#2E7D32] font-semibold">{caption}</p>}
     </div>
+  )
+
+  if (!href) return card
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={`Visit ${name} (opens in a new tab)`}
+      title={`Visit ${href.replace('https://', '')}`}
+      className="rounded-lg transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2E7D32]"
+    >
+      {card}
+    </a>
   )
 }

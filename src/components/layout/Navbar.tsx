@@ -5,6 +5,7 @@ import { signOut } from 'firebase/auth'
 import { auth } from '../../lib/firebase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useSettings } from '../../contexts/SettingsContext'
+import { RAISSAT_URL } from '../../lib/constants'
 
 export default function Navbar() {
   const { firebaseUser, profile, isAdmin } = useAuth()
@@ -28,19 +29,30 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2E7D32] rounded">
-            {settings.raiissatLogoUrl ? (
-              <img src={settings.raiissatLogoUrl} alt="RAISSAT logo" className="h-9 w-9 object-contain flex-shrink-0" />
-            ) : (
-              <div className="w-8 h-8 bg-[#12304A] rounded flex items-center justify-center flex-shrink-0">
-                <span className="text-[#D4AF37] font-bold text-xs">R</span>
-              </div>
-            )}
-            <div className="hidden sm:block">
+          <div className="flex items-center gap-2">
+            {/* Logo -> RAISSAT website */}
+            <a
+              href={RAISSAT_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Visit the RAISSAT website (opens in a new tab)"
+              title="Visit raissat.org"
+              className="flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2E7D32] rounded"
+            >
+              {settings.raiissatLogoUrl ? (
+                <img src={settings.raiissatLogoUrl} alt="RAISSAT logo" className="h-9 w-9 object-contain" />
+              ) : (
+                <div className="w-8 h-8 bg-[#12304A] rounded flex items-center justify-center">
+                  <span className="text-[#D4AF37] font-bold text-xs">R</span>
+                </div>
+              )}
+            </a>
+            {/* Name -> this site's home page */}
+            <Link to="/" className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2E7D32] rounded">
               <p className="text-xs font-bold text-[#12304A] leading-tight">RAISSAT</p>
               <p className="text-xs text-[#5A6472] leading-tight">Digital Food Systems</p>
-            </div>
-          </Link>
+            </Link>
+          </div>
 
           {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-6" aria-label="Main navigation">

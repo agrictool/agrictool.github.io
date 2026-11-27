@@ -17,3 +17,7 @@ export const CATEGORIES = [
   'Agricultural and Food Research',
   'Other / Emerging Technologies',
 ] as const
+
+// Official websites opened when a logo is clicked
+export const RAISSAT_URL = 'https://raissat.org'
+export const TECHBASE_URL = 'https://techbasengr.com.ng'

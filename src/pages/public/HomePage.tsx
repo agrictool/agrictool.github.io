@@ -7,6 +7,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useSettings } from '../../contexts/SettingsContext'
 import { ButtonLink } from '../../components/ui'
 import OrgCard from '../../components/OrgCard'
+import { RAISSAT_URL, TECHBASE_URL } from '../../lib/constants'
 import { usePartners } from '../../lib/usePartners'
 
 const KEY_AREAS = [
@@ -245,11 +246,13 @@ export default function HomePage() {
               name="Research Applied Institute for Sustainability in Science, Agriculture and Technology"
               logoUrl={settings.raiissatLogoUrl}
               caption="Organiser"
+              href={RAISSAT_URL}
             />
             <OrgCard
               name={settings.collaboratorName}
               logoUrl={settings.collaboratorLogoUrl}
               caption="Collaborator"
+              href={TECHBASE_URL}
             />
             {partners.map(p => (
               <OrgCard key={p.id} name={p.name} logoUrl={p.logoUrl} caption={p.type} />

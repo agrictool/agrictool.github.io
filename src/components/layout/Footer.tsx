@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useSettings } from '../../contexts/SettingsContext'
 import { usePartners } from '../../lib/usePartners'
+import { RAISSAT_URL, TECHBASE_URL } from '../../lib/constants'
 
 export default function Footer() {
   const { settings } = useSettings()
@@ -12,7 +13,13 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {/* Identity */}
           <div>
-            <div className="flex items-center gap-2 mb-3">
+            <a
+              href={RAISSAT_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Visit the RAISSAT website (opens in a new tab)"
+              className="inline-flex items-center gap-2 mb-3 hover:opacity-90"
+            >
               {settings.raiissatLogoUrl ? (
                 <span className="w-9 h-9 bg-white rounded p-0.5 flex items-center justify-center flex-shrink-0">
                   <img src={settings.raiissatLogoUrl} alt="RAISSAT logo" className="max-w-full max-h-full object-contain" />
@@ -23,7 +30,7 @@ export default function Footer() {
                 </div>
               )}
               <span className="font-bold text-sm">RAISSAT</span>
-            </div>
+            </a>
             <p className="text-xs text-blue-200 leading-relaxed mb-2">
               Research Applied Institute for Sustainability in Science, Agriculture and Technology
             </p>
@@ -36,13 +43,21 @@ export default function Footer() {
           <div>
             <h3 className="text-sm font-semibold text-[#D4AF37] mb-3">In Collaboration With</h3>
             <ul className="space-y-3">
-              <li className="flex items-center gap-2">
-                {settings.collaboratorLogoUrl && (
-                  <span className="w-9 h-9 bg-white rounded p-0.5 flex items-center justify-center flex-shrink-0">
-                    <img src={settings.collaboratorLogoUrl} alt="" className="max-w-full max-h-full object-contain" />
-                  </span>
-                )}
-                <span className="text-xs text-blue-200 leading-relaxed">{settings.collaboratorName}</span>
+              <li>
+                <a
+                  href={TECHBASE_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Visit ${settings.collaboratorName} (opens in a new tab)`}
+                  className="flex items-center gap-2 hover:opacity-90"
+                >
+                  {settings.collaboratorLogoUrl && (
+                    <span className="w-9 h-9 bg-white rounded p-0.5 flex items-center justify-center flex-shrink-0">
+                      <img src={settings.collaboratorLogoUrl} alt="" className="max-w-full max-h-full object-contain" />
+                    </span>
+                  )}
+                  <span className="text-xs text-blue-200 leading-relaxed">{settings.collaboratorName}</span>
+                </a>
               </li>
               {partners.map(p => (
                 <li key={p.id} className="flex items-center gap-2">

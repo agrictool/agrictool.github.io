@@ -140,7 +140,7 @@ function SettingsForm() {
           <Input
             label="Programme Date" required
             value={form.programmeDate} onChange={set('programmeDate')}
-            placeholder="e.g. October 16, 2026"
+            placeholder="e.g. 27th November 2026"
           />
           <Input
             label="Programme Location" required

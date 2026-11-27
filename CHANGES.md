@@ -26,3 +26,8 @@
 15. **Invitation codes** – new required "Invitation Code (Required)" field and "Gender (Required)" (Male/Female) on the registration page. Codes are hashed and stored in Firestore, never in the site files. Used once, in an atomic transaction; the 60 limit is enforced by `firestore.rules`.
 16. **Admin → Invitation Codes** – seed the 60 codes once, see used/unused, who used each and when, gender totals, and export CSV (with gender). Participants page also shows gender.
 17. See `INVITATION_SYSTEM.md`.
+
+## Round 5
+
+18. **Clickable logos** – the RAISSAT logo (header, homepage, footer) opens https://raissat.org and the TechBase logo/name (homepage, footer) opens https://techbasengr.com.ng, each in a new tab. In the header the "RAISSAT Digital Food Systems" text still goes to the home page.
+19. **Programme date** – default date changed to "27th November 2026". If you already saved a date in Admin -> Settings, change it there too.
